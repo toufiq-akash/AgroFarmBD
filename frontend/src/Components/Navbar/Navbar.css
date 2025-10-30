@@ -1,0 +1,91 @@
+/* === Navbar Design === */
+nav {
+  width: 100%;
+  color: #fff;
+  padding: 0px 10px;  /* Slim navbar */
+  position: fixed;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 100;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.014);
+}
+
+/* === Logo & Text Alignment === */
+.logo-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* === Logo Image Styling === */
+.logo {
+  height: 90px;      /* Keep logo large */
+  width: 250px;
+  object-fit: contain;
+  border-radius: 5px;
+  transform: scale(1.05);
+}
+
+/* === Navbar Links === */
+nav ul li {
+  display: inline-block;
+  list-style: none;
+  margin: 5px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: color 0.3s;
+}
+
+/* === Dark sticky navbar === */
+.dark-nav {
+  background: #212EA0;
+  transition: 0.5s;
+}
+
+/* === Text beside logo === */
+.logo-container h1 {
+  font-size: 20px;
+  font-weight: bold;
+  color: #fff;
+  margin: 0;
+}
+
+/* === Active section styling === */
+nav ul li.active,
+nav ul li:hover {
+  color: #ffcc00; /* Highlight color for active section */
+  font-weight: bold;
+}
+
+.btn.active {
+  background-color: #ffcc00; /* Highlight color */
+  color: #212EA0;
+  font-weight: bold;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+
+/* === Responsive view (for mobile) === */
+@media (max-width: 600px) {
+  .logo {
+    height: 40px;
+    width: 100px;
+    transform: scale(1);
+  }
+  .logo-container h1 {
+    font-size: 16px;
+  }
+
+  nav ul li {
+    font-size: 14px;
+    margin: 3px;
+  }
+
+  .btn.active {
+    font-size: 14px;
+    padding: 8px 12px;
+  }
+}

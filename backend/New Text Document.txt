@@ -1,0 +1,36 @@
+import express from "express";
+import mysql from "mysql2";
+import cors from "cors";
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// ✅ MySQL connection
+const db = mysql.createConnection({
+  host: "localhost",
+  user: "root",       // change
+  password: "yourpass", // change
+  database: "mydb"    // change
+});
+
+// ✅ API route
+app.post("/login", (req, res) => {
+  const { username, password } = req.body;
+
+  db.query(
+    "SELECT * FROM users WHERE username = ? AND password = ?",
+    [username, password],
+    (err, results) => {
+      if (err) return res.status(500).json({ error: "Server error" });
+      if (results.length > 0) {
+        res.json({ success: true, message: "Login successful" });
+      } else {
+        res.json({ success: false, message: "Invalid credentials" });
+      }
+    }
+  );
+});
+
+// ✅ start server
+app.listen(5000, () => console.log("Backend running at http://localhost:5000"));
