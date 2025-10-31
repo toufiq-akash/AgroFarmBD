@@ -52,10 +52,6 @@ Users can submit feedback or report other users.
 
 Admin can view and delete reports per user.
 
-
-
-
-
 | Layer           | Technology                     |
 | --------------- | ------------------------------ |
 | **Frontend**    | React.js, React Router, Axios  |
@@ -83,6 +79,7 @@ npm install express mysql2 cors bcryptjs
 
 Open phpMyAdmin or MySQL shell and run:
 
+```
 CREATE DATABASE signup;
 
 USE signup;
@@ -123,10 +120,7 @@ CREATE TABLE reports (
   reportedUserId INT,
   reason TEXT
 );
-
-
-
-
+```
 
 🧠 Start the backend server
 node server.js
@@ -157,7 +151,7 @@ http://localhost:5173
 
 🌈 Folder Structure
 
-
+```
 project-root/
 │
 ├── backend/
@@ -177,7 +171,7 @@ project-root/
 │   ├── package.json
 │
 └── README.md
-
+```
 
 🧩 API Endpoints Summary
 
@@ -224,13 +218,11 @@ Restriction system to prevent blocked users from login.
 👨‍💻 Abu Syed Rahat
     0802310205101083
 
- 
-     Level 3 Term 2 web engg. project  
-Bangladesh Army University of Science and technology, Saidpur
+
+Level 3 Term 2 Web Enginnering project  
+Bangladesh Army University of Science and Technology, Saidpur
 🗓️ Year: 2025
 📚 Technologies used: React, Node, Express, MySQL
-
-
 
 
 ❤️ Thank You!
