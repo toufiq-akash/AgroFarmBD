@@ -1,126 +1,148 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
 export default function CustomerProfile() {
   const navigate = useNavigate();
-  const [user, setUser] = useState({ id: "", fullname: "", email: "", role: "Customer" });
-  const [oldPassword, setOldPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [message, setMessage] = useState("");
+  const [user, setUser] = useState(null);
+  const [formData, setFormData] = useState({
+    fullName: "",
+    oldPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
 
   // Load user from localStorage
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem("user"));
     if (!storedUser) navigate("/login");
-    else setUser({ id: parseInt(storedUser.id, 10) || "", ...storedUser });
+    else {
+      setUser(storedUser);
+      setFormData({
+        fullName: storedUser.fullName || storedUser.fullname || "",
+        oldPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+    }
   }, [navigate]);
 
-  const handleChange = (e) => setUser({ ...user, [e.target.name]: e.target.value });
-
-  const handleUpdate = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    if (!user) return;
+
     setMessage("");
 
-    if (!user.id) {
-      setMessage("⚠️ User ID missing, cannot update profile.");
-      setLoading(false);
-      return;
+    // Password validation
+    if ((formData.newPassword || formData.confirmPassword) && formData.newPassword !== formData.confirmPassword) {
+      return setMessage("❌ New password and confirm password do not match!");
     }
-
-    const updateData = {};
-    if (user.fullname.trim() !== "") updateData.fullname = user.fullname;
-    if (user.email.trim() !== "") updateData.email = user.email;
-    if (oldPassword && newPassword) {
-      updateData.oldPassword = oldPassword;
-      updateData.newPassword = newPassword;
-    }
-
-    if (Object.keys(updateData).length === 0) {
-      setMessage("Nothing to update");
-      setLoading(false);
-      return;
+    if ((formData.newPassword || formData.confirmPassword) && !formData.oldPassword) {
+      return setMessage("❌ Please enter your old password to change it.");
     }
 
     try {
-      const res = await fetch(`http://localhost:5000/users/${user.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updateData),
-      });
-      const data = await res.json();
-      setMessage(data.message);
+      setLoading(true);
 
-      if (res.ok) {
-        const updatedUser = { ...user };
-        if (updateData.fullname) updatedUser.fullname = updateData.fullname;
-        if (updateData.email) updatedUser.email = updateData.email;
-        localStorage.setItem("user", JSON.stringify(updatedUser));
-        setUser(updatedUser);
+      const payload = { fullName: formData.fullName };
+
+      if (formData.oldPassword && formData.newPassword) {
+        payload.oldPassword = formData.oldPassword;
+        payload.newPassword = formData.newPassword;
       }
+
+      const res = await axios.put(`http://localhost:5000/users/${user.id}`, payload);
+
+      setMessage("✅ Profile updated successfully!");
+      const updatedUser = { ...user, fullName: formData.fullName };
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+      setUser(updatedUser);
+
+      setFormData((prev) => ({ ...prev, oldPassword: "", newPassword: "", confirmPassword: "" }));
     } catch (err) {
       console.error(err);
-      setMessage("⚠️ Update failed. Please try again.");
+      setMessage(err.response?.data?.message || "❌ Failed to update profile");
     } finally {
       setLoading(false);
-      setOldPassword("");
-      setNewPassword("");
     }
   };
+
+  if (!user) return null;
 
   return (
     <div style={container}>
       <div style={card}>
         <h2 style={title}>My Profile</h2>
-        <form onSubmit={handleUpdate}>
+        <form onSubmit={handleSubmit}>
           <input
             type="text"
-            name="fullname"
-            value={user.fullname}
-            onChange={handleChange}
+            name="fullName"
+            value={formData.fullName}
+            onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
             placeholder="Full Name"
             style={inputStyle}
+            required
           />
           <input
             type="email"
-            name="email"
             value={user.email}
-            onChange={handleChange}
-            placeholder="Email"
-            style={inputStyle}
-          />
-          <input
-            type="password"
-            name="oldPassword"
-            value={oldPassword}
-            onChange={(e) => setOldPassword(e.target.value)}
-            placeholder="Old Password"
-            style={inputStyle}
-          />
-          <input
-            type="password"
-            name="newPassword"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="New Password"
-            style={inputStyle}
+            disabled
+            style={{ ...inputStyle, background: "#f0f0f0", cursor: "not-allowed" }}
           />
           <input
             type="text"
-            name="role"
-            value={user.role}
-            readOnly
+            value={user.role || "Customer"}
+            disabled
             style={{ ...inputStyle, background: "#f0f0f0", cursor: "not-allowed" }}
           />
+
+          <h3 style={{ color: "#2e7d32", marginBottom: "10px", marginTop: "20px" }}>Change Password (optional)</h3>
+          <input
+            type="password"
+            placeholder="Old Password"
+            value={formData.oldPassword}
+            onChange={(e) => setFormData({ ...formData, oldPassword: e.target.value })}
+            style={inputStyle}
+          />
+          <input
+            type="password"
+            placeholder="New Password"
+            value={formData.newPassword}
+            onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
+            style={inputStyle}
+          />
+          <input
+            type="password"
+            placeholder="Confirm New Password"
+            value={formData.confirmPassword}
+            onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+            style={inputStyle}
+          />
+
           <button type="submit" disabled={loading} style={buttonStyle}>
             {loading ? "Updating..." : "Update Profile"}
           </button>
         </form>
-        {message && <p style={{ ...messageStyle, color: message.includes("failed") ? "#d32f2f" : "#388e3c" }}>{message}</p>}
-        <p style={backStyle} onClick={() => navigate("/customer-dashboard")}>
+        {message && (
+          <p style={{ ...messageStyle, color: message.includes("failed") ? "#d32f2f" : "#388e3c" }}>{message}</p>
+        )}
+        <div style={{ textAlign: "center", marginTop: "30px" }}>
+        <button
+          onClick={() => navigate("/customer-dashboard")}
+          style={{
+            backgroundColor: "#078ee2ff",
+            color: "white",
+            border: "none",
+            padding: "10px 20px",
+            borderRadius: "5px",
+            cursor: "pointer",
+          }}
+        >
           ← Back to Dashboard
-        </p>
+        </button>
+      </div>
       </div>
     </div>
   );

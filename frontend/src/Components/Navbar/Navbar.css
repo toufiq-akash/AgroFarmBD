@@ -2,7 +2,7 @@
 nav {
   width: 100%;
   color: #fff;
-  padding: 0px 10px;  /* Slim navbar */
+  padding: 0px 20px;
   position: fixed;
   top: 0;
   left: 0;
@@ -11,6 +11,7 @@ nav {
   justify-content: space-between;
   z-index: 100;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.014);
+  transition: all 0.3s ease;
 }
 
 /* === Logo & Text Alignment === */
@@ -20,16 +21,28 @@ nav {
   gap: 10px;
 }
 
-/* === Logo Image Styling === */
 .logo {
-  height: 90px;      /* Keep logo large */
+  height: 90px;
   width: 250px;
   object-fit: contain;
   border-radius: 5px;
   transform: scale(1.05);
 }
 
+.logo-container h1 {
+  font-size: 20px;
+  font-weight: bold;
+  color: #fff;
+  margin: 0;
+}
+
 /* === Navbar Links === */
+nav ul {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
 nav ul li {
   display: inline-block;
   list-style: none;
@@ -39,42 +52,66 @@ nav ul li {
   transition: color 0.3s;
 }
 
+nav ul li.active,
+nav ul li:hover {
+  color: #ffcc00;
+  font-weight: bold;
+}
+
 /* === Dark sticky navbar === */
 .dark-nav {
   background: #212EA0;
-  transition: 0.5s;
 }
 
-/* === Text beside logo === */
-.logo-container h1 {
-  font-size: 20px;
-  font-weight: bold;
+/* === Base Button Style === */
+.btn {
+  padding: 10px 20px;
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.35s ease;
+  letter-spacing: 0.5px;
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+}
+
+/* === Login Button Style === */
+.login-btn {
+  background: linear-gradient(90deg, #ffdd00, #ffc107);
+  color: #000;
+  box-shadow: 0 4px 12px rgba(255, 221, 0, 0.4);
+}
+
+.login-btn:hover {
+  background: linear-gradient(90deg, #ffffff, #cc9a05);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(187, 162, 3, 0.5);
+}
+
+/* === Logout Button Style === */
+.logout-btn {
+  background: linear-gradient(90deg,  #e85f4c, #9d0303);
   color: #fff;
-  margin: 0;
+  box-shadow: 0 4px 12px rgba(46, 125, 50, 0.4);
 }
 
-/* === Active section styling === */
-nav ul li.active,
-nav ul li:hover {
-  color: #ffcc00; /* Highlight color for active section */
-  font-weight: bold;
+.logout-btn:hover {
+  background: linear-gradient(90deg, #e3490b, #9d0303);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(84, 5, 1, 0.5);
 }
 
-.btn.active {
-  background-color: #ffcc00; /* Highlight color */
-  color: #212EA0;
-  font-weight: bold;
-  transition: background-color 0.3s, color 0.3s;
-}
-
-
-/* === Responsive view (for mobile) === */
+/* === Responsive view === */
 @media (max-width: 600px) {
   .logo {
     height: 40px;
     width: 100px;
     transform: scale(1);
   }
+
   .logo-container h1 {
     font-size: 16px;
   }
@@ -84,7 +121,7 @@ nav ul li:hover {
     margin: 3px;
   }
 
-  .btn.active {
+  .btn {
     font-size: 14px;
     padding: 8px 12px;
   }

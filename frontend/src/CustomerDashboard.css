@@ -9,7 +9,7 @@
 /* Sidebar */
 .sidebar {
   width: 250px;
-  background-color: #2e7d32;
+  background-color: #0b89a8;
   color: white;
   padding: 30px 20px;
   display: flex;
@@ -41,12 +41,12 @@
 
 .sidebar ul li:hover,
 .sidebar ul li.active {
-  background-color: #1b5e20;
+  background-color: #1c5154;
 }
 
 .logout-btn {
   margin-top: auto; /* push to bottom */
-  background-color: #d32f2f;
+  background-color: #df0a0a;
   border: none;
   padding: 10px; /* bigger size like before */
   border-radius: 8px;
@@ -76,12 +76,12 @@
 }
 
 .dashboard-header h1 {
-  color: #2e7d32;
+  color: #0b89a8;
   margin-bottom: 5px;
 }
 
 .profile-btn {
-  background-color: #2e7d32;
+  background-color: #0b89a8;
   color: white;
   padding: 10px 20px;
   border: none;
@@ -131,7 +131,7 @@ th, td {
 }
 
 th {
-  background-color: #2e7d32;
+  background-color: #0b89a8;
   color: white;
 }
 

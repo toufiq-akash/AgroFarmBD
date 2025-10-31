@@ -11,6 +11,7 @@ import Login from "./Login.jsx";
 
 // Dashboards
 import FarmOwnerDashboard from './FarmOwnerDashboard.jsx';
+import FarmOwnerProfile from "./FarmOwnerProfile.jsx";
 import CustomerDashboard from './CustomerDashboard.jsx';
 import CustomerProfile from './CustomerProfile.jsx';
 import ProductsPage from "./ProductsPage";
@@ -50,6 +51,7 @@ function App() {
         <Route path="/customer-dashboard" element={<CustomerDashboard />} />
         <Route path="/customer-profile" element={<CustomerProfile />} />
         <Route path="/farm-owner-dashboard" element={<FarmOwnerDashboard />} />
+        <Route path="/farm-owner-profile" element={<FarmOwnerProfile />} />
         <Route path="/products" element={<ProductsPage />} />
 
         {/* Admin Routes */}
