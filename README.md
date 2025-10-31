@@ -77,7 +77,7 @@ npm install express mysql2 cors bcryptjs
 
 ⚙️ Create MySQL Database
 
-Open phpMyAdmin or MySQL shell and run:
+Open phpMyAdmin or MySQL shell and run: (signup.sql file added)
 
 ```
 CREATE DATABASE signup;
