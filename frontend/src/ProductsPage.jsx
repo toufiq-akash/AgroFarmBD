@@ -3,8 +3,11 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
 // -------------------- OrderForm Modal --------------------
-function OrderForm({ product, user, onClose, onOrderSuccess }) {
-  const [quantity, setQuantity] = useState(1);
+function OrderForm({ product, products, user, onClose, onOrderSuccess }) {
+  const isCartOrder = Array.isArray(products);
+  const items = isCartOrder ? products : [product];
+
+  const [quantities, setQuantities] = useState(items.map((p) => p.quantity || 1));
   const [phone, setPhone] = useState(user?.phone || "");
   const [address, setAddress] = useState(user?.address || "");
   const [paymentMethod, setPaymentMethod] = useState("cod");
@@ -12,14 +15,15 @@ function OrderForm({ product, user, onClose, onOrderSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const unitPrice = Number(product?.price || 0);
-  const subtotal = +(unitPrice * quantity).toFixed(2);
+  const updateQuantity = (index, dir) => {
+    setQuantities((prev) =>
+      prev.map((q, i) => (i === index ? Math.max(1, q + (dir === "inc" ? 1 : -1)) : q))
+    );
+  };
+
+  const subtotal = items.reduce((acc, p, i) => acc + Number(p.price) * quantities[i], 0);
   const shipping = subtotal > 1000 ? 0 : 50;
   const total = +(subtotal + shipping).toFixed(2);
-
-  const updateQuantity = (dir) => {
-    setQuantity((q) => Math.max(1, q + (dir === "inc" ? 1 : -1)));
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -27,12 +31,16 @@ function OrderForm({ product, user, onClose, onOrderSuccess }) {
     if (!phone.trim()) return setError("Phone is required.");
     if (!address.trim()) return setError("Address is required.");
 
+    const orderItems = items.map((p, i) => ({
+      productId: p.id,
+      quantity: quantities[i],
+      unitPrice: Number(p.price),
+      subtotal: +(Number(p.price) * quantities[i]).toFixed(2),
+    }));
+
     const payload = {
       userId: user.id,
-      productId: product.id,
-      quantity,
-      unitPrice,
-      subtotal,
+      items: orderItems,
       shipping,
       totalCost: total,
       phone,
@@ -60,44 +68,37 @@ function OrderForm({ product, user, onClose, onOrderSuccess }) {
           <h3>Complete your order</h3>
           <button style={closeBtn} onClick={onClose}>✕</button>
         </div>
-        <div style={{ display: "flex", gap: 20, marginTop: 15, flexWrap: "wrap" }}>
-          <div style={{ flex: "1 0 200px", minWidth: 200 }}>
-            <img
-              src={`http://localhost:5000${product.image}`}
-              alt={product.name}
-              style={{ width: "100%", borderRadius: 10, objectFit: "cover", height: 150 }}
-            />
-            <h4 style={{ margin: "10px 0 4px", color: "#1b5e20" }}>{product.name}</h4>
-            <div style={{ color: "#555" }}>Seller: {product.ownerName || "Unknown"}</div>
-            <div style={{ fontWeight: 700, marginTop: 6 }}>৳{unitPrice}</div>
-            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-              <button type="button" onClick={() => updateQuantity("dec")} style={qtyBtnStyle}>−</button>
-              <div style={qtyBoxStyle}>{quantity}</div>
-              <button type="button" onClick={() => updateQuantity("inc")} style={qtyBtnStyle}>+</button>
-            </div>
-          </div>
-          <form onSubmit={handleSubmit} style={{ flex: "2 0 300px", minWidth: 300 }}>
+        <form onSubmit={handleSubmit}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 15 }}>
+            {items.map((p, index) => (
+              <div key={p.id} style={{ display: "flex", gap: 20, alignItems: "center" }}>
+                <img
+                  src={`http://localhost:5000${p.image}`}
+                  alt={p.name}
+                  style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 10 }}
+                />
+                <div style={{ flex: 1 }}>
+                  <h4 style={{ margin: "0 0 4px", color: "#1b5e20", fontSize: 18 }}>{p.name}</h4>
+                  <div>Seller: {p.ownerName || "Unknown"}</div>
+                  <div style={{ fontWeight: 700, fontSize: 16 }}>৳{p.price}</div>
+                </div>
+                <div>
+                  <button type="button" style={qtyBtnStyle} onClick={() => updateQuantity(index, "dec")}>−</button>
+                  <span style={qtyBoxStyle}>{quantities[index]}</span>
+                  <button type="button" style={qtyBtnStyle} onClick={() => updateQuantity(index, "inc")}>+</button>
+                </div>
+              </div>
+            ))}
+
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <label style={labelStyle}>Buyer</label>
               <input style={inputStyle} type="text" value={user?.fullName || ""} disabled />
               <label style={labelStyle}>Email</label>
               <input style={inputStyle} type="email" value={user?.email || ""} disabled />
               <label style={labelStyle}>Phone *</label>
-              <input
-                style={inputStyle}
-                type="text"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="01XXXXXXXXX"
-              />
+              <input style={inputStyle} type="text" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="01XXXXXXXXX" />
               <label style={labelStyle}>Shipping Address *</label>
-              <textarea
-                style={{ ...inputStyle, resize: "vertical" }}
-                rows={3}
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="House, Road, Area, City, Postal"
-              />
+              <textarea style={{ ...inputStyle, resize: "vertical" }} rows={3} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="House, Road, Area, City, Postal" />
               <label style={labelStyle}>Payment Method</label>
               <select style={inputStyle} value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
                 <option value="cod">Cash on Delivery</option>
@@ -105,17 +106,11 @@ function OrderForm({ product, user, onClose, onOrderSuccess }) {
                 <option value="card">Credit / Debit Card</option>
               </select>
               <label style={labelStyle}>Note</label>
-              <input
-                style={inputStyle}
-                type="text"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Optional"
-              />
+              <input style={inputStyle} type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" />
             </div>
 
             <div style={summaryBox}>
-              <div style={summaryRow}><span>Subtotal</span><b>৳{subtotal}</b></div>
+              <div style={summaryRow}><span>Subtotal</span><b>৳{subtotal.toFixed(2)}</b></div>
               <div style={summaryRow}><span>Shipping</span><b>৳{shipping}</b></div>
               <div style={{ ...summaryRow, fontSize: 18 }}><span>Total</span><b>৳{total}</b></div>
             </div>
@@ -123,20 +118,18 @@ function OrderForm({ product, user, onClose, onOrderSuccess }) {
             {error && <div style={errorStyle}>{error}</div>}
 
             <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-              <button type="submit" style={submitBtn} disabled={loading}>
-                {loading ? "Placing..." : `Place Order • ৳${total}`}
-              </button>
+              <button type="submit" style={submitBtn} disabled={loading}>{loading ? "Placing..." : `Place Order • ৳${total}`}</button>
               <button type="button" style={cancelBtn} onClick={onClose}>Cancel</button>
             </div>
-          </form>
-        </div>
+          </div>
+        </form>
       </div>
     </div>
   );
 }
 
 // -------------------- Cart Modal --------------------
-function CartModal({ cart, setCart, user, onClose, onOrderSuccess }) {
+function CartModal({ cart, setCart, user, onClose, onOpenOrderForm }) {
   const navigate = useNavigate();
 
   const updateQuantity = (productId, dir) => {
@@ -157,19 +150,21 @@ function CartModal({ cart, setCart, user, onClose, onOrderSuccess }) {
 
   const handlePlaceOrder = () => {
     if (!user) {
-      alert("You must log in to place order!");
+      alert("❌You must log in to place order!");
       navigate("/login");
       return;
     }
-    if (cart.length > 0) {
-      onOrderSuccess(cart[0]);
-      onClose();
+    if (cart.length === 0) {
+      alert("Cart is empty!");
+      return;
     }
+    onOpenOrderForm(cart);
+    onClose();
   };
 
   return (
     <div style={overlayStyle}>
-      <div style={{ ...modalStyle, maxWidth: "700px" }}>
+      <div style={{ ...modalStyle, maxWidth: "800px", width: "750px" }}>
         <div style={modalHeader}>
           <h3>Your Cart</h3>
           <button style={closeBtn} onClick={onClose}>✕</button>
@@ -178,7 +173,7 @@ function CartModal({ cart, setCart, user, onClose, onOrderSuccess }) {
           <p style={{ padding: 20 }}>Your cart is empty.</p>
         ) : (
           <>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 16 }}>
               <thead>
                 <tr>
                   <th style={thStyle}>Product</th>
@@ -220,7 +215,7 @@ function CartModal({ cart, setCart, user, onClose, onOrderSuccess }) {
   );
 }
 
-// -------------------- Helper --------------------
+// -------------------- Helper Functions --------------------
 const saveCartToStorage = (cart, user) => {
   const key = user ? `cart_user_${user.id}` : "cart_guest";
   localStorage.setItem(key, JSON.stringify(cart));
@@ -238,13 +233,15 @@ export default function ProductsPage() {
   const [products, setProducts] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
-  const [orderMessage, setOrderMessage] = useState("");
   const [cart, setCart] = useState([]);
   const [showCartModal, setShowCartModal] = useState(false);
+  const [sortOption, setSortOption] = useState("newest");
+  const [notification, setNotification] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const productsPerPage = 10;
+  const productsPerPage = 12;
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem("user"));
@@ -258,26 +255,31 @@ export default function ProductsPage() {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
+        let res;
         if (user?.role === "farmowner") {
-          const res = await axios.get(`http://localhost:5000/get-my-products/${user.id}`);
-          setProducts(res.data);
+          res = await axios.get(`http://localhost:5000/get-my-products/${user.id}`);
         } else {
-          const res = await axios.get("http://localhost:5000/get-products");
-          setProducts(res.data);
+          res = await axios.get(`http://localhost:5000/get-products?sort=${sortOption}`);
         }
+        setProducts(res.data);
       } catch (err) {
         console.error(err);
       }
     };
     fetchProducts();
-  }, [user]);
+  }, [user, sortOption]);
 
   const handleOrder = (product) => {
-    if (!user) return alert("❌ You must log in first to order!");
-    if (user.role === "farmowner") return alert("Farmowners cannot order products.");
-    setSelectedProduct(product);
-    setShowOrderModal(true);
-  };
+  if (!user) {
+    alert("❌ You must log in first to order!");
+    navigate("/login"); // redirect to login
+    return;
+  }
+  
+  setSelectedProduct(product);
+  setShowOrderModal(true);
+};
+
 
   const handleAddToCart = (product) => {
     const existing = cart.find((item) => item.id === product.id);
@@ -291,14 +293,23 @@ export default function ProductsPage() {
     }
     setCart(newCart);
     saveCartToStorage(newCart, user);
+
+    setNotification(`✅ "${product.name}" added to cart`);
+    setTimeout(() => setNotification(""), 2000);
   };
 
-  const onOrderSuccess = (product) => {
+  const openOrderFormWithCart = (cartItems) => {
+    setSelectedProduct(null);
+    setShowOrderModal(true);
+  };
+
+  const onOrderSuccess = () => {
     setShowOrderModal(false);
     setSelectedProduct(null);
-    setOrderMessage("✅ Order placed successfully!");
     setCart([]);
     saveCartToStorage([], user);
+    setNotification("✅ Order placed successfully!");
+    setTimeout(() => setNotification(""), 3000);
   };
 
   const handleDelete = async (id) => {
@@ -313,42 +324,77 @@ export default function ProductsPage() {
     }
   };
 
-  // Pagination calculations
+  // Filtered products based on search
+  const filteredProducts = products.filter(
+    (p) =>
+      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.description && p.description.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  // Pagination
   const indexOfLast = currentPage * productsPerPage;
   const indexOfFirst = indexOfLast - productsPerPage;
-  const currentProducts = products.slice(indexOfFirst, indexOfLast);
-  const totalPages = Math.ceil(products.length / productsPerPage);
+  const currentProducts = filteredProducts.slice(indexOfFirst, indexOfLast);
+  const totalPages = Math.ceil(filteredProducts.length / productsPerPage);
 
   return (
     <div style={styles.wrapper}>
-      <header style={styles.header}>
-        <div style={styles.titleBox}>
-          <h1 style={styles.title}>🌿 AgroFarm Products</h1>
-          <p style={styles.subtitle}>Welcome, {user?.fullName || "Customer"}</p>
+      <header style={{ ...styles.header, flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+  {/* Centered Title */}
+  <div style={{ textAlign: "center" }}>
+    <h1 style={styles.title}>🌿 AgroFarm Products</h1>
+    <p style={styles.subtitle}>Welcome, {user?.fullName || "Customer"}</p>
+  </div>
+
+  {/* Controls under the title, aligned right */}
+  <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 15, flexWrap: "wrap" }}>
+    <input
+      type="text"
+      placeholder="Search products..."
+      value={searchTerm}
+      onChange={(e) => setSearchTerm(e.target.value)}
+      style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #ccc" }}
+    />
+
+    <select
+      style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #ccc" }}
+      value={sortOption}
+      onChange={(e) => setSortOption(e.target.value)}
+    >
+      <option value="newest">Newest First</option>
+      <option value="oldest">Oldest First</option>
+      <option value="price_low">Price: Low → High</option>
+      <option value="price_high">Price: High → Low</option>
+    </select>
+
+    <div style={{ position: "relative" }}>
+      <button style={styles.addCartBtn} onClick={() => setShowCartModal(true)}>
+        🛒
+        {cart.length > 0 && <span style={styles.cartCount}>{cart.length}</span>}
+      </button>
+    </div>
+
+    {!user && (
+      <>
+        <button style={styles.loginBtn} onClick={() => navigate("/login")}>Login</button>
+        <button style={styles.signupBtn} onClick={() => navigate("/signup")}>Sign Up</button>
+      </>
+    )}
+  </div>
+</header>
+
+
+
+
+      {notification && (
+        <div style={notificationStyle}>
+          {notification}
         </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 15 }}>
-          <div style={{ position: "relative" }}>
-            <button style={styles.addCartBtn} onClick={() => setShowCartModal(true)}>
-              🛒
-              {cart.length > 0 && <span style={styles.cartCount}>{cart.length}</span>}
-            </button>
-          </div>
-
-          {!user && (
-            <>
-              <button style={styles.loginBtn} onClick={() => navigate("/login")}>Login</button>
-              <button style={styles.signupBtn} onClick={() => navigate("/signup")}>Sign Up</button>
-            </>
-          )}
-        </div>
-      </header>
-
-      {orderMessage && <div style={{ color: "green", margin: "10px 0" }}>{orderMessage}</div>}
+      )}
 
       <div style={styles.grid}>
         {currentProducts.length === 0 ? (
-          <div style={styles.noProducts}>No products available.</div>
+          <div style={styles.noProducts}>No products found.</div>
         ) : (
           currentProducts.map((product) => (
             <div key={product.id} style={styles.card}>
@@ -375,48 +421,46 @@ export default function ProductsPage() {
         )}
       </div>
 
-      {/* Pagination Buttons */}
       {totalPages > 1 && (
         <div style={{ display: "flex", justifyContent: "center", marginTop: 20, gap: 10 }}>
           <button
             style={paginationBtnStyle}
             onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
             disabled={currentPage === 1}
-          >
-            Previous
-          </button>
-
-          {Array.from({ length: totalPages }, (_, i) => (
+          >Previous</button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((num) => (
             <button
-              key={i}
-              style={{
-                ...paginationBtnStyle,
-                background: i + 1 === currentPage ? "#4caf50" : "#fff",
-                color: i + 1 === currentPage ? "#fff" : "#000",
-                border: i + 1 === currentPage ? "2px solid #2e7d32" : "1px solid #ccc",
-              }}
-              onClick={() => setCurrentPage(i + 1)}
-            >
-              {i + 1}
-            </button>
+              key={num}
+              style={{ ...paginationBtnStyle, fontWeight: num === currentPage ? "bold" : "normal" }}
+              onClick={() => setCurrentPage(num)}
+            >{num}</button>
           ))}
-
           <button
             style={paginationBtnStyle}
             onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
             disabled={currentPage === totalPages}
-          >
-            Next
-          </button>
+          >Next</button>
         </div>
       )}
 
-      {showOrderModal && selectedProduct && (
-        <OrderForm product={selectedProduct} user={user} onClose={() => setShowOrderModal(false)} onOrderSuccess={onOrderSuccess} />
+      {showOrderModal && (
+        <OrderForm
+          product={selectedProduct}
+          products={selectedProduct ? null : cart}
+          user={user}
+          onClose={() => setShowOrderModal(false)}
+          onOrderSuccess={onOrderSuccess}
+        />
       )}
 
       {showCartModal && (
-        <CartModal cart={cart} setCart={setCart} user={user} onClose={() => setShowCartModal(false)} onOrderSuccess={handleOrder} />
+        <CartModal
+          cart={cart}
+          setCart={setCart}
+          user={user}
+          onClose={() => setShowCartModal(false)}
+          onOpenOrderForm={openOrderFormWithCart}
+        />
       )}
     </div>
   );
@@ -424,43 +468,43 @@ export default function ProductsPage() {
 
 // -------------------- Styles --------------------
 const styles = {
-  wrapper: { padding: 20 },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
-  titleBox: { display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", width: "100%" }, // centered
-  title: { fontSize: 28, color: "#1b5e20", margin: 0 },
-  subtitle: { fontSize: 16, color: "#555", margin: 0 },
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 20 },
-  card: { padding: 15, border: "1px solid #eee", borderRadius: 10, background: "#fff", transition: "all 0.3s" },
-  imageBox: { width: "100%", height: 150, overflow: "hidden", borderRadius: 10, marginBottom: 10 },
+  wrapper: { padding: 20, fontFamily: "Arial, sans-serif" },
+  header: { display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", marginBottom: 20, gap: 10 },
+  title: { fontSize: 32, margin: 0, color: "#2e7d32" },
+  subtitle: { margin: 0, color: "#555" },
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 20 },
+  card: { border: "1px solid #ccc", borderRadius: 10, padding: 15, display: "flex", flexDirection: "column", gap: 10 },
+  imageBox: { width: "100%", height: 150, overflow: "hidden", borderRadius: 10 },
   image: { width: "100%", height: "100%", objectFit: "cover" },
-  name: { fontSize: 18, fontWeight: 600 },
-  desc: { fontSize: 14, color: "#666" },
-  price: { fontWeight: 700, marginTop: 6 },
-  owner: { fontSize: 12, color: "#333" },
-  orderBtn: { marginTop: 8, padding: "6px 12px", background: "#2e7d32", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" },
-  addCartBtn: { marginTop: 5, padding: "6px 12px", background: "#4caf50", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" },
-  deleteBtn: { marginTop: 5, padding: "6px 12px", background: "#e53935", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" },
-  noProducts: { textAlign: "center", color: "#777", marginTop: 50 },
-  cartCount: { position: "absolute", top: -5, right: -8, background: "#e53935", color: "#fff", borderRadius: "50%", width: 18, height: 18, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center" },
-  buttonGroup: { display: "flex", gap: 10 },
+  name: { margin: 0, fontSize: 18, color: "#1b5e20" },
+  desc: { margin: 0, fontSize: 14, color: "#555", minHeight: 40 },
+  price: { fontWeight: 700, color: "#2e7d32" },
+  owner: { fontSize: 12, color: "#888" },
+  buttonGroup: { display: "flex", gap: 8, flexWrap: "wrap" },
+  orderBtn: { flex: 1, padding: "6px 8px", background: "#04880dff", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" },
+  addCartBtn: { flex: 1, padding: "6px 8px", background: "#f57f17", color: "#000000ff", border: "none", borderRadius: 6, cursor: "pointer", position: "relative" },
+  deleteBtn: { flex: 1, padding: "6px 8px", background: "#e53935", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" },
+  cartCount: { position: "absolute", top: -6, right: -6, background: "red", color: "#fff", borderRadius: "50%", padding: "2px 6px", fontSize: 12 },
   loginBtn: { padding: "6px 12px", borderRadius: 6, border: "1px solid #2e7d32", background: "#fff", color: "#2e7d32", cursor: "pointer" },
-  signupBtn: { padding: "6px 12px", borderRadius: 6, border: "none", background: "#2e7d32", color: "#fff", cursor: "pointer" },
+  signupBtn: { padding: "6px 12px", borderRadius: 6, border: "1px solid #2e7d32", background: "#2e7d32", color: "#fff", cursor: "pointer" },
+  noProducts: { textAlign: "center", fontSize: 18, color: "#888", gridColumn: "1/-1" }
 };
 
 // -------------------- Modal Styles --------------------
-const overlayStyle = { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.4)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 };
-const modalStyle = { background: "#fff", padding: 20, borderRadius: 10, maxHeight: "90vh", overflowY: "auto", width: "90%", maxWidth: 800 };
+const overlayStyle = { position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 9999 };
+const modalStyle = { background: "#fff", borderRadius: 10, padding: 20, maxHeight: "90vh", overflowY: "auto", width: "90%", maxWidth: "600px" };
 const modalHeader = { display: "flex", justifyContent: "space-between", alignItems: "center" };
-const closeBtn = { background: "none", border: "none", fontSize: 18, cursor: "pointer" };
-const inputStyle = { padding: 8, borderRadius: 6, border: "1px solid #ccc", width: "100%" };
-const labelStyle = { fontWeight: 500 };
-const qtyBtnStyle = { padding: "2px 6px", cursor: "pointer" };
-const qtyBoxStyle = { display: "inline-block", minWidth: 24, textAlign: "center" };
-const summaryBox = { marginTop: 15, padding: 10, border: "1px solid #eee", borderRadius: 8 };
-const summaryRow = { display: "flex", justifyContent: "space-between", marginTop: 6 };
-const errorStyle = { color: "red", marginTop: 10 };
-const submitBtn = { padding: "8px 16px", background: "#2e7d32", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" };
-const cancelBtn = { padding: "8px 16px", background: "#aaa", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" };
-const thStyle = { borderBottom: "1px solid #ccc", padding: 6, textAlign: "left" };
-const tdStyle = { borderBottom: "1px solid #eee", padding: 6 };
-const paginationBtnStyle = { padding: "6px 12px", borderRadius: 6, cursor: "pointer" };
+const closeBtn = { border: "none", background: "transparent", fontSize: 20, cursor: "pointer" };
+const qtyBtnStyle = { padding: "2px 8px", margin: "0 2px", border: "1px solid #ccc", borderRadius: 4, cursor: "pointer", background: "#eee" };
+const qtyBoxStyle = { padding: "2px 6px", minWidth: 30, display: "inline-block", textAlign: "center" };
+const labelStyle = { fontWeight: 600 };
+const inputStyle = { padding: "6px 10px", borderRadius: 6, border: "1px solid #ccc", width: "100%" };
+const summaryBox = { borderTop: "1px solid #ccc", paddingTop: 10 };
+const summaryRow = { display: "flex", justifyContent: "space-between", marginTop: 4 };
+const submitBtn = { padding: "8px 16px", background: "#1b5e20", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" };
+const cancelBtn = { padding: "8px 16px", background: "#ccc", color: "#333", border: "none", borderRadius: 6, cursor: "pointer" };
+const errorStyle = { color: "red", fontWeight: 600 };
+const thStyle = { textAlign: "left", borderBottom: "1px solid #ccc", padding: "6px 8px" };
+const tdStyle = { padding: "6px 8px", borderBottom: "1px solid #eee" };
+const notificationStyle = { position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", background: "#4caf50", color: "#fff", padding: "10px 20px", borderRadius: 6, zIndex: 10000 };
+const paginationBtnStyle = { padding: "6px 10px", border: "1px solid #ccc", borderRadius: 6, cursor: "pointer", background: "#fff" };

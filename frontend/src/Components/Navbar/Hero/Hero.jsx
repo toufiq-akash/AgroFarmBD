@@ -35,7 +35,7 @@ const Hero = () => {
   const handleBackToDashboard = () => {
     if (!user) return;
     if (user.role === "Customer") navigate("/customer-dashboard");
-    else if (user.role === "FarmOwner") navigate("/farm-owner-dashboard");
+    else if (user.role === "Owner") navigate("/farm-owner-dashboard");
     else if (user.role === "Admin") navigate("/admin-dashboard");
   };
 

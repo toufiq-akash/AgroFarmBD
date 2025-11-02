@@ -66,7 +66,7 @@ export default function CustomerDashboard() {
 
   const handleLogout = () => {
     localStorage.removeItem("user");
-    navigate("/login");
+    navigate("/hero");
   };
 
   const stats = {
@@ -117,32 +117,7 @@ export default function CustomerDashboard() {
           </div>
         </section>
 
-        {/* Products Section */}
-        {/* <section className="products-section">
-          <h2>Available Products</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th>Seller</th>
-                <th>Price (৳)</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((p) => (
-                <tr key={p.id}>
-                  <td>{p.name}</td>
-                  <td>{p.ownerName || "Unknown"}</td>
-                  <td>{p.price}</td>
-                  <td>
-                    <button className="order-btn" onClick={() => handleOrderProduct(p)}>Order Now</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section> */}
+        
 
         {/* Orders Section */}
         <section className="orders-section">

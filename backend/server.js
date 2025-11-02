@@ -50,8 +50,6 @@ db.connect((err) => {
 // ========================
 // ✅ User Routes
 // ========================
-
-// Signup
 app.post("/signup", async (req, res) => {
   const { fullName, email, password, role } = req.body;
   if (!fullName || !email || !password || !role)
@@ -73,7 +71,6 @@ app.post("/signup", async (req, res) => {
   });
 });
 
-// Login
 app.post("/login", (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ message: "Email and password are required." });
@@ -104,7 +101,6 @@ app.post("/login", (req, res) => {
   });
 });
 
-// GET single user by id (for profile)
 app.get("/users/:id", (req, res) => {
   const id = parseInt(req.params.id, 10);
   db.query("SELECT id, fullname, email, role, status FROM users WHERE id = ?", [id], (err, results) => {
@@ -114,7 +110,6 @@ app.get("/users/:id", (req, res) => {
   });
 });
 
-// Update Profile
 app.put("/users/:id", async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const { fullName, email, oldPassword, newPassword } = req.body;
@@ -161,8 +156,6 @@ app.put("/users/:id", async (req, res) => {
 // ========================
 // ✅ Admin Routes
 // ========================
-
-// Dashboard stats
 app.get("/admin/stats", (req, res) => {
   const stats = {};
   db.query("SELECT COUNT(*) AS count FROM users", (err, result1) => {
@@ -180,7 +173,6 @@ app.get("/admin/stats", (req, res) => {
   });
 });
 
-// Manage Users
 app.get("/admin/users", (req, res) => {
   db.query("SELECT id, fullname, email, role, status FROM users", (err, results) => {
     if (err) return res.status(500).json({ message: "Database error" });
@@ -224,7 +216,6 @@ app.put("/admin/users/restrict/:id", (req, res) => {
   });
 });
 
-// Admin - Products
 app.get("/admin/products", (req, res) => {
   db.query("SELECT * FROM products", (err, results) => {
     if (err) return res.status(500).json({ message: "Database error" });
@@ -240,7 +231,6 @@ app.delete("/admin/products/:id", (req, res) => {
   });
 });
 
-// Admin - Orders
 app.get("/admin/orders", (req, res) => {
   db.query("SELECT * FROM orders", (err, results) => {
     if (err) return res.status(500).json({ message: "Database error" });
@@ -256,7 +246,6 @@ app.delete("/admin/orders/:id", (req, res) => {
   });
 });
 
-// Admin - Feedbacks
 app.get("/admin/feedbacks", (req, res) => {
   db.query("SELECT * FROM feedbacks", (err, results) => {
     if (err) return res.status(500).json({ message: "Database error" });
@@ -264,7 +253,6 @@ app.get("/admin/feedbacks", (req, res) => {
   });
 });
 
-// Admin - Reports
 app.get("/admin/reports", (req, res) => {
   db.query("SELECT * FROM reports", (err, results) => {
     if (err) return res.status(500).json({ message: "Database error" });
@@ -283,8 +271,6 @@ app.delete("/admin/reports/delete/:userId", (req, res) => {
 // ========================
 // ✅ Product Routes (Farm Owner)
 // ========================
-
-// Add new product with image upload
 app.post("/add-product", upload.single("image"), (req, res) => {
   const { name, price, description, userId } = req.body;
   if (!name || !price || !description || !userId || !req.file)
@@ -302,20 +288,52 @@ app.post("/add-product", upload.single("image"), (req, res) => {
   );
 });
 
-// Get all products (public) with ownerName
+app.put("/update-product/:id", upload.single("image"), (req, res) => {
+  const { id } = req.params;
+  const { name, price, description } = req.body;
+  const image = req.file ? `/uploads/${req.file.filename}` : null;
+
+  let query = "UPDATE products SET name = ?, price = ?, description = ?";
+  const params = [name, price, description];
+
+  if (image) {
+    query += ", image = ?";
+    params.push(image);
+  }
+
+  query += " WHERE id = ?";
+  params.push(id);
+
+  db.query(query, params, (err) => {
+    if (err) return res.status(500).json({ message: "Failed to update product" });
+    res.json({ message: "Product updated successfully!" });
+  });
+});
+
+// ✅ Updated Get Products with Smart Sorting
 app.get("/get-products", (req, res) => {
+  const sort = req.query.sort || "newest";
+  let orderBy = "p.id DESC";
+
+  if (sort === "oldest") orderBy = "p.id ASC";
+  else if (sort === "price_low") orderBy = "p.price ASC";
+  else if (sort === "price_high") orderBy = "p.price DESC";
+  else if (sort === "name_az") orderBy = "p.name ASC";
+  else if (sort === "name_za") orderBy = "p.name DESC";
+
   const query = `
     SELECT p.*, u.fullname AS ownerName
     FROM products p
     LEFT JOIN users u ON p.userId = u.id
+    ORDER BY ${orderBy}
   `;
+
   db.query(query, (err, results) => {
     if (err) return res.status(500).json({ message: "Database error" });
     res.json(results);
   });
 });
 
-// Get products by farm owner id
 app.get("/get-my-products/:userId", (req, res) => {
   const { userId } = req.params;
   db.query("SELECT * FROM products WHERE userId = ?", [userId], (err, results) => {
@@ -324,7 +342,6 @@ app.get("/get-my-products/:userId", (req, res) => {
   });
 });
 
-// ✅ New: Delete product by ID (Farm Owner)
 app.delete("/delete-product/:id", (req, res) => {
   const id = req.params.id;
   db.query("DELETE FROM products WHERE id = ?", [id], (err) => {
