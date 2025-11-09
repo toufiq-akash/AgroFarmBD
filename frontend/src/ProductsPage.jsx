@@ -150,7 +150,7 @@ function CartModal({ cart, setCart, user, onClose, onOpenOrderForm }) {
 
   const handlePlaceOrder = () => {
     if (!user) {
-      alert("❌You must log in to place order!");
+      alert("You must log in to place order!");
       navigate("/login");
       return;
     }
@@ -271,7 +271,7 @@ export default function ProductsPage() {
 
   const handleOrder = (product) => {
   if (!user) {
-    alert("❌ You must log in first to order!");
+    alert("You must log in first to order!");
     navigate("/login"); // redirect to login
     return;
   }
@@ -294,7 +294,7 @@ export default function ProductsPage() {
     setCart(newCart);
     saveCartToStorage(newCart, user);
 
-    setNotification(`✅ "${product.name}" added to cart`);
+    setNotification(`"${product.name}" added to cart`);
     setTimeout(() => setNotification(""), 2000);
   };
 
@@ -308,7 +308,7 @@ export default function ProductsPage() {
     setSelectedProduct(null);
     setCart([]);
     saveCartToStorage([], user);
-    setNotification("✅ Order placed successfully!");
+    setNotification("Order placed successfully!");
     setTimeout(() => setNotification(""), 3000);
   };
 
@@ -317,10 +317,10 @@ export default function ProductsPage() {
     try {
       await axios.delete(`http://localhost:5000/delete-product/${id}`, { data: { userId: user.id } });
       setProducts(products.filter((p) => p.id !== id));
-      alert("✅ Product deleted successfully!");
+      alert("Product deleted successfully!");
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.message || "❌ Failed to delete product");
+      alert(err.response?.data?.message || "Failed to delete product");
     }
   };
 
