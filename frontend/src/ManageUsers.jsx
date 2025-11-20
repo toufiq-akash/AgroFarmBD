@@ -9,7 +9,7 @@ export default function ManageUsers() {
     fetchReports();
   }, []);
 
-  // Fetch all users
+  // ---------------- FETCH ----------------
   const fetchUsers = async () => {
     try {
       const res = await fetch("http://localhost:5000/admin/users");
@@ -20,7 +20,6 @@ export default function ManageUsers() {
     }
   };
 
-  // Fetch all reports
   const fetchReports = async () => {
     try {
       const res = await fetch("http://localhost:5000/admin/reports");
@@ -31,7 +30,7 @@ export default function ManageUsers() {
     }
   };
 
-  // Delete user
+  // ---------------- ACTIONS ----------------
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this user?")) return;
     try {
@@ -45,7 +44,6 @@ export default function ManageUsers() {
     }
   };
 
-  // Restrict user
   const handleRestrict = async (id) => {
     try {
       const res = await fetch(`http://localhost:5000/admin/users/restrict/${id}`, {
@@ -61,12 +59,9 @@ export default function ManageUsers() {
     }
   };
 
-  // Unrestrict user and delete their reports
   const handleUnrestrict = async (id) => {
-    if (!window.confirm("Are you sure you want to unrestrict this user and delete their reports?")) return;
-
+    if (!window.confirm("Unrestrict this user and delete their reports?")) return;
     try {
-      // 1️⃣ Unrestrict user
       const res1 = await fetch(`http://localhost:5000/admin/users/restrict/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -75,14 +70,8 @@ export default function ManageUsers() {
       const data1 = await res1.json();
       alert(data1.message);
 
-      // 2️⃣ Delete all reports of this user
-      const res2 = await fetch(`http://localhost:5000/admin/reports/delete/${id}`, {
-        method: "DELETE",
-      });
-      const data2 = await res2.json();
-      console.log(data2.message);
+      await fetch(`http://localhost:5000/admin/reports/delete/${id}`, { method: "DELETE" });
 
-      // Refresh users and reports
       fetchUsers();
       fetchReports();
     } catch (err) {
@@ -90,95 +79,224 @@ export default function ManageUsers() {
     }
   };
 
-  // Get reports for a specific user
-  const getUserReports = (userId) => reports.filter((r) => r.reportedUserId === userId);
+  // ---------------- REPORT FILTER ----------------
+  const getUserReports = (userId) =>
+    reports.filter((r) => r.reportedFarmOwnerId === userId);
+
+  // ---------------- USERS BY ROLE ----------------
+  const customers = users.filter((u) => u.role === "Customer");
+  const owners = users.filter((u) => u.role === "Owner");
+  const deliverymen = users.filter((u) => u.role === "DeliveryMan");
 
   return (
     <div style={{ padding: "30px", fontFamily: "'Poppins', sans-serif" }}>
-      <h1>Manage Users</h1>
-      <table style={tableStyle}>
+      <h1 style={titleStyle}>Manage Users & Reports</h1>
+
+      <h2 style={sectionTitle}>Customers</h2>
+      <UserTable
+        users={customers}
+        getUserReports={getUserReports}
+        handleDelete={handleDelete}
+        handleRestrict={handleRestrict}
+        handleUnrestrict={handleUnrestrict}
+      />
+
+      <h2 style={sectionTitle}>Owners</h2>
+      <UserTable
+        users={owners}
+        getUserReports={getUserReports}
+        handleDelete={handleDelete}
+        handleRestrict={handleRestrict}
+        handleUnrestrict={handleUnrestrict}
+      />
+
+      <h2 style={sectionTitle}>Deliverymen</h2>
+      <UserTable
+        users={deliverymen}
+        getUserReports={getUserReports}
+        handleDelete={handleDelete}
+        handleRestrict={handleRestrict}
+        handleUnrestrict={handleUnrestrict}
+      />
+    </div>
+  );
+}
+
+// ---------------------- USER TABLE ----------------------
+function UserTable({ users, getUserReports, handleDelete, handleRestrict, handleUnrestrict }) {
+  return (
+    <div style={card}>
+      <table style={table}>
         <thead>
-          <tr style={headerStyle}>
-            <th>ID</th>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Status</th>
-            <th>Reports</th>
-            <th>Actions</th>
+          <tr>
+            <th style={th}>ID</th>
+            <th style={th}>Name</th>
+            <th style={th}>Email</th>
+            <th style={th}>Role</th>
+            <th style={th}>Status</th>
+            <th style={th}>Reports</th>
+            <th style={th}>Actions</th>
           </tr>
         </thead>
+
         <tbody>
-          {users.map((user) => {
-            const userReports = getUserReports(user.id);
-            return (
-              <tr key={user.id} style={rowStyle}>
-                <td>{user.id}</td>
-                <td>{user.fullname || user.fullName}</td>
-                <td>{user.email}</td>
-                <td>{user.role}</td>
-                <td>{user.status || "active"}</td>
-                <td>
-                  {userReports.length > 0
-                    ? userReports.map((r) => (
-                        <div key={r.id}>
-                          {r.reason} - <b>{r.reporterName}</b>
-                        </div>
-                      ))
-                    : "No Reports"}
-                </td>
-                <td>
-                  {userReports.length > 0 && user.status !== "restricted" && (
-                    <button style={restrictBtnStyle} onClick={() => handleRestrict(user.id)}>
-                      Restrict
+          {users.length === 0 ? (
+            <tr>
+              <td colSpan="7" style={{ textAlign: "center", padding: "15px" }}>
+                No users found
+              </td>
+            </tr>
+          ) : (
+            users.map((user) => {
+              const userReports = getUserReports(user.id);
+
+              return (
+                <tr key={user.id} style={row}>
+                  <td style={td}>{user.id}</td>
+                  <td style={td}>{user.fullname || user.fullName}</td>
+                  <td style={td}>{user.email}</td>
+                  <td style={td}>{user.role}</td>
+
+                  {/* STATUS BADGE */}
+                  <td style={td}>
+                    <span
+                      style={{
+                        ...badge,
+                        backgroundColor:
+                          user.status === "restricted" ? "#e53935" : "#43a047",
+                        color: "#fff",
+                      }}
+                    >
+                      {user.status || "Active"}
+                    </span>
+                  </td>
+
+                  {/* REPORTS BADGE */}
+                  <td style={td}>
+                    {userReports.length > 0 ? (
+                      <span style={{ ...badge, backgroundColor: "#fdd835", color: "#000" }}>
+                        {userReports.length} Report{userReports.length > 1 ? "s" : ""}
+                      </span>
+                    ) : (
+                      <span style={{ ...badge, backgroundColor: "#c8e6c9", color: "#2e7d32" }}>
+                        No Reports
+                      </span>
+                    )}
+                  </td>
+
+                  {/* ACTION BUTTONS */}
+                  <td style={td}>
+                    {userReports.length > 0 && user.status !== "restricted" && (
+                      <button style={btnWarning} onClick={() => handleRestrict(user.id)}>
+                        Restrict
+                      </button>
+                    )}
+
+                    {user.status === "restricted" && (
+                      <button style={btnSuccess} onClick={() => handleUnrestrict(user.id)}>
+                        Unrestrict
+                      </button>
+                    )}
+
+                    <button style={btnDanger} onClick={() => handleDelete(user.id)}>
+                      Delete
                     </button>
-                  )}
-                  {user.status === "restricted" && (
-                    <button style={unrestrictBtnStyle} onClick={() => handleUnrestrict(user.id)}>
-                      Unrestrict
-                    </button>
-                  )}
-                  <button style={deleteBtnStyle} onClick={() => handleDelete(user.id)}>
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
+                  </td>
+                </tr>
+              );
+            })
+          )}
         </tbody>
       </table>
     </div>
   );
 }
 
-// Styles
-const tableStyle = { width: "100%", borderCollapse: "collapse", marginTop: "20px" };
-const headerStyle = { borderBottom: "2px solid #ccc" };
-const rowStyle = { borderBottom: "1px solid #eee" };
-const deleteBtnStyle = {
-  background: "#d32f2f",
+// ---------------------- STYLES ----------------------
+
+const titleStyle = {
+  marginBottom: "20px",
+  fontSize: "28px",
+  fontWeight: "600",
+  color: "#2e7d32",
+};
+
+const sectionTitle = {
+  marginTop: "30px",
+  marginBottom: "10px",
+  fontSize: "22px",
+  color: "#388e3c",
+};
+
+const card = {
+  background: "#ffffff",
+  padding: "20px",
+  borderRadius: "12px",
+  boxShadow: "0px 4px 12px rgba(56, 142, 60, 0.15)",
+  marginBottom: "25px",
+};
+
+const table = {
+  width: "100%",
+  borderCollapse: "collapse",
+  fontSize: "14px",
+};
+
+const th = {
+  textAlign: "left",
+  padding: "12px",
+  background: "#e8f5e9",
+  fontWeight: "600",
+  color: "#2e7d32",
+};
+
+const td = {
+  padding: "12px",
+  verticalAlign: "top",
+  color: "#333",
+};
+
+const row = {
+  borderBottom: "1px solid #dcedc8",
+  transition: "background 0.2s",
+};
+
+const badge = {
+  display: "inline-block",
+  padding: "4px 10px",
+  borderRadius: "12px",
+  fontSize: "13px",
+  fontWeight: "500",
+  textAlign: "center",
+};
+
+const btnDanger = {
+  background: "#e53935",
   color: "#fff",
   border: "none",
-  padding: "5px 10px",
+  padding: "6px 12px",
   borderRadius: "6px",
   cursor: "pointer",
-  marginLeft: "5px",
+  marginRight: "8px",
+  transition: "background 0.2s",
 };
-const restrictBtnStyle = {
-  background: "#fbc02d",
+const btnWarning = {
+  background: "#fdd835",
   color: "#000",
   border: "none",
-  padding: "5px 10px",
+  padding: "6px 12px",
   borderRadius: "6px",
   cursor: "pointer",
-  marginRight: "5px",
+  marginRight: "8px",
+  transition: "background 0.2s",
 };
-const unrestrictBtnStyle = {
-  background: "#388e3c",
+const btnSuccess = {
+  background: "#43a047",
   color: "#fff",
   border: "none",
-  padding: "5px 10px",
+  padding: "6px 12px",
   borderRadius: "6px",
   cursor: "pointer",
-  marginRight: "5px",
+  marginRight: "8px",
+  transition: "background 0.2s",
 };

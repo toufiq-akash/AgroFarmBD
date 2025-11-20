@@ -259,7 +259,8 @@ export default function ProductsPage() {
         if (user?.role === "farmowner") {
           res = await axios.get(`http://localhost:5000/get-my-products/${user.id}`);
         } else {
-          res = await axios.get(`http://localhost:5000/get-products?sort=${sortOption}`);
+          const searchParam = searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : "";
+          res = await axios.get(`http://localhost:5000/get-products?sort=${sortOption}${searchParam}`);
         }
         setProducts(res.data);
       } catch (err) {
@@ -267,7 +268,7 @@ export default function ProductsPage() {
       }
     };
     fetchProducts();
-  }, [user, sortOption]);
+  }, [user, sortOption, searchTerm]);
 
   const handleOrder = (product) => {
   if (!user) {
@@ -324,18 +325,11 @@ export default function ProductsPage() {
     }
   };
 
-  // Filtered products based on search
-  const filteredProducts = products.filter(
-    (p) =>
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.description && p.description.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
-  // Pagination
+  // Pagination (search is now handled by backend)
   const indexOfLast = currentPage * productsPerPage;
   const indexOfFirst = indexOfLast - productsPerPage;
-  const currentProducts = filteredProducts.slice(indexOfFirst, indexOfLast);
-  const totalPages = Math.ceil(filteredProducts.length / productsPerPage);
+  const currentProducts = products.slice(indexOfFirst, indexOfLast);
+  const totalPages = Math.ceil(products.length / productsPerPage);
 
   return (
     <div style={styles.wrapper}>
@@ -410,10 +404,14 @@ export default function ProductsPage() {
                   <>
                     <button style={styles.orderBtn} onClick={() => handleOrder(product)}>Order Now</button>
                     <button style={styles.addCartBtn} onClick={() => handleAddToCart(product)}>Add to Cart</button>
+                    <button style={styles.viewBtn} onClick={() => navigate(`/product/${product.id}`)}>View Details</button>
                   </>
                 )}
                 {user?.role === "farmowner" && (
-                  <button style={styles.deleteBtn} onClick={() => handleDelete(product.id)}>Delete</button>
+                  <>
+                    <button style={styles.viewBtn} onClick={() => navigate(`/farm-owner/product/${product.id}`)}>Preview</button>
+                    <button style={styles.deleteBtn} onClick={() => handleDelete(product.id)}>Delete</button>
+                  </>
                 )}
               </div>
             </div>
@@ -483,6 +481,7 @@ const styles = {
   buttonGroup: { display: "flex", gap: 8, flexWrap: "wrap" },
   orderBtn: { flex: 1, padding: "6px 8px", background: "#04880dff", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" },
   addCartBtn: { flex: 1, padding: "6px 8px", background: "#f57f17", color: "#000000ff", border: "none", borderRadius: 6, cursor: "pointer", position: "relative" },
+  viewBtn: { flex: 1, padding: "6px 8px", background: "#1976d2", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" },
   deleteBtn: { flex: 1, padding: "6px 8px", background: "#e53935", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" },
   cartCount: { position: "absolute", top: -6, right: -6, background: "red", color: "#fff", borderRadius: "50%", padding: "2px 6px", fontSize: 12 },
   loginBtn: { padding: "6px 12px", borderRadius: 6, border: "1px solid #2e7d32", background: "#fff", color: "#2e7d32", cursor: "pointer" },

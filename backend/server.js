@@ -32,15 +32,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// ========================
-// ✅ MySQL Connection
-// ========================
-const db = mysql.createConnection({
-  host: "localhost",
-  user: "root",
-  password: "",
-  database: "signup",
-});
+import db from "./db.js";
 
 db.connect((err) => {
   if (err) console.error("❌ Database connection failed:", err);
@@ -232,11 +224,24 @@ app.delete("/admin/products/:id", (req, res) => {
 });
 
 app.get("/admin/orders", (req, res) => {
-  db.query("SELECT * FROM orders", (err, results) => {
-    if (err) return res.status(500).json({ message: "Database error" });
+  const sql = `
+    SELECT 
+      o.*, 
+      GROUP_CONCAT(CONCAT(p.name, ' (', oi.quantity, ')') SEPARATOR ', ') AS products,
+      SUM(oi.quantity) AS totalQuantity
+    FROM orders o
+    LEFT JOIN order_items oi ON o.id = oi.order_id
+    LEFT JOIN products p ON oi.product_id = p.id
+    GROUP BY o.id
+    ORDER BY o.id DESC
+  `;
+
+  db.query(sql, (err, results) => {
+    if (err) return res.status(500).json({ error: err });
     res.json(results);
   });
 });
+
 
 app.delete("/admin/orders/:id", (req, res) => {
   const id = req.params.id;
@@ -268,6 +273,14 @@ app.delete("/admin/reports/delete/:userId", (req, res) => {
   });
 });
 
+app.delete("/admin/feedbacks/:id", (req, res) => {
+  const id = req.params.id;
+  db.query("DELETE FROM feedbacks WHERE id = ?", [id], (err) => {
+    if (err) return res.status(500).json({ message: "Failed to delete feedback" });
+    res.json({ message: "Feedback deleted successfully" });
+  });
+});
+
 // ========================
 // ✅ Product Routes (Farm Owner)
 // ========================
@@ -278,23 +291,34 @@ app.post("/add-product", upload.single("image"), (req, res) => {
 
   const imageUrl = `/uploads/${req.file.filename}`;
 
-  db.query(
-    "INSERT INTO products (userId, name, price, image, description) VALUES (?, ?, ?, ?, ?)",
-    [userId, name, price, imageUrl, description],
-    (err) => {
-      if (err) return res.status(500).json({ message: "Failed to add product" });
-      res.status(201).json({ message: "Product added successfully!", image: imageUrl });
+  // Resolve owner email from users table using userId
+  db.query("SELECT email FROM users WHERE id = ?", [userId], (lookupErr, results) => {
+    if (lookupErr) {
+      return res.status(500).json({ message: "Failed to resolve owner email" });
     }
-  );
+    if (results.length === 0) {
+      return res.status(400).json({ message: "Owner user not found" });
+    }
+    const owner_email = results[0].email;
+
+    db.query(
+      "INSERT INTO products (userId, name, price, image, description, owner_email) VALUES (?, ?, ?, ?, ?, ?)",
+      [userId, name, price, imageUrl, description, owner_email],
+      (err) => {
+        if (err) return res.status(500).json({ message: "Failed to add product" });
+        res.status(201).json({ message: "Product added successfully!", image: imageUrl });
+      }
+    );
+  });
 });
 
 app.put("/update-product/:id", upload.single("image"), (req, res) => {
   const { id } = req.params;
-  const { name, price, description } = req.body;
+  const { name, price, description, owner_email } = req.body;
   const image = req.file ? `/uploads/${req.file.filename}` : null;
 
-  let query = "UPDATE products SET name = ?, price = ?, description = ?";
-  const params = [name, price, description];
+  let query = "UPDATE products SET name = ?, price = ?, description = ?, owner_email = ?";
+  const params = [name, price, description, owner_email];
 
   if (image) {
     query += ", image = ?";
@@ -310,9 +334,10 @@ app.put("/update-product/:id", upload.single("image"), (req, res) => {
   });
 });
 
-// ✅ Updated Get Products with Smart Sorting
+// ✅ Updated Get Products with Smart Sorting and Search
 app.get("/get-products", (req, res) => {
   const sort = req.query.sort || "newest";
+  const search = req.query.search || "";
   let orderBy = "p.id DESC";
 
   if (sort === "oldest") orderBy = "p.id ASC";
@@ -321,16 +346,44 @@ app.get("/get-products", (req, res) => {
   else if (sort === "name_az") orderBy = "p.name ASC";
   else if (sort === "name_za") orderBy = "p.name DESC";
 
-  const query = `
+  let query = `
     SELECT p.*, u.fullname AS ownerName
     FROM products p
     LEFT JOIN users u ON p.userId = u.id
-    ORDER BY ${orderBy}
   `;
+  const params = [];
 
-  db.query(query, (err, results) => {
+  if (search.trim()) {
+    query += ` WHERE p.name LIKE ? OR p.description LIKE ? OR p.id = ?`;
+    const searchTerm = `%${search}%`;
+    params.push(searchTerm, searchTerm, isNaN(search) ? -1 : parseInt(search));
+  }
+
+  query += ` ORDER BY ${orderBy}`;
+
+  db.query(query, params, (err, results) => {
     if (err) return res.status(500).json({ message: "Database error" });
     res.json(results);
+  });
+});
+
+// ✅ Get Product by ID or Name
+app.get("/get-product/:identifier", (req, res) => {
+  const identifier = req.params.identifier;
+  const isNumeric = !isNaN(identifier);
+
+  let query = `
+    SELECT p.*, u.fullname AS ownerName, u.email AS ownerEmail
+    FROM products p
+    LEFT JOIN users u ON p.userId = u.id
+    WHERE ${isNumeric ? "p.id = ?" : "p.name LIKE ?"}
+  `;
+  const param = isNumeric ? parseInt(identifier) : `%${identifier}%`;
+
+  db.query(query, [param], (err, results) => {
+    if (err) return res.status(500).json({ message: "Database error" });
+    if (results.length === 0) return res.status(404).json({ message: "Product not found" });
+    res.json(isNumeric ? results[0] : results);
   });
 });
 
@@ -349,6 +402,266 @@ app.delete("/delete-product/:id", (req, res) => {
     res.json({ message: "Product deleted successfully" });
   });
 });
+
+
+
+
+///////////////reports
+
+app.post("/report", async (req, res) => {
+  const { reportedFarmOwnerId, reporterCustomerId, reason, proofUrl } = req.body;
+
+  // order_id is optional now
+  if (!reportedFarmOwnerId || !reporterCustomerId || !reason) {
+    return res.status(400).json({ message: "Missing required fields" });
+  }
+
+  try {
+    const query = `
+      INSERT INTO reports 
+      (reportedFarmOwnerId, reporterCustomerId, reason, proofUrl)
+      VALUES (?, ?, ?, ?)
+    `;
+    db.query(
+      query,
+      [reportedFarmOwnerId, reporterCustomerId, reason, proofUrl || null],
+      (err, result) => {
+        if (err) {
+          console.error(err);
+          return res.status(500).json({ message: "Database error" });
+        }
+        return res.json({ message: "Report submitted successfully" });
+      }
+    );
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ========================
+// ✅ Order Routes
+// ========================
+app.post("/place-order", (req, res) => {
+  const { userId, items, shipping, totalCost, phone, address, paymentMethod, note } = req.body;
+
+  if (!userId || !items || !Array.isArray(items) || items.length === 0 || !phone || !address) {
+    return res.status(400).json({ message: "Missing required fields" });
+  }
+
+  // Get farmowner_id from first product
+  db.query("SELECT userId FROM products WHERE id = ?", [items[0].productId], (err, productResult) => {
+    if (err || productResult.length === 0) {
+      return res.status(400).json({ message: "Invalid product" });
+    }
+
+    const farmownerId = productResult[0].userId;
+
+
+    // Insert order
+    const orderQuery = `
+      INSERT INTO orders (customer_id, farmowner_id, total_price, delivery_address, contact_number, status, created_at)
+      VALUES (?, ?, ?, ?, ?, 'Pending', NOW())
+    `;
+
+    db.query(
+      orderQuery,
+      [userId, farmownerId, totalCost, address, phone],
+      (err, orderResult) => {
+        if (err) {
+          console.error("Order insert error:", err);
+          return res.status(500).json({ message: "Failed to create order" });
+        }
+
+        const orderId = orderResult.insertId;
+
+        // Insert order items
+        const itemQueries = items.map((item) => {
+          return new Promise((resolve, reject) => {
+            db.query(
+              "INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)",
+              [orderId, item.productId, item.quantity, item.unitPrice],
+              (err) => {
+                if (err) reject(err);
+                else resolve();
+              }
+            );
+          });
+        });
+
+        Promise.all(itemQueries)
+          .then(() => {
+            res.status(201).json({
+              message: "Order placed successfully!",
+              orderId: orderId,
+            });
+          })
+          .catch((err) => {
+            console.error("Order items insert error:", err);
+            res.status(500).json({ message: "Failed to create order items" });
+          });
+      }
+    );
+  });
+});
+
+// Get My Orders for a Customer
+app.get("/get-my-orders/:customerId", (req, res) => {
+  const customerId = req.params.customerId;
+
+  const query = `
+    SELECT 
+      o.id AS id,
+      o.customer_id,
+      o.farmowner_id,
+      u.fullname AS farmownerName,
+      GROUP_CONCAT(CONCAT(p.name, ' (', oi.quantity, ')') SEPARATOR ', ') AS productName,
+      SUM(oi.quantity) AS totalQuantity,
+      SUM(oi.price) AS totalPrice,
+      o.delivery_address AS address,
+      o.contact_number AS phone,
+      o.status,
+      o.created_at
+    FROM orders o
+    JOIN order_items oi ON o.id = oi.order_id
+    JOIN products p ON oi.product_id = p.id
+    JOIN users u ON o.farmowner_id = u.id
+    WHERE o.customer_id = ?
+    GROUP BY o.id, o.farmowner_id, u.fullname, o.delivery_address, o.contact_number, o.status, o.created_at
+    ORDER BY o.created_at DESC
+  `;
+
+  db.query(query, [customerId], (err, results) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ message: "Database error" });
+    }
+    res.json(results);
+  });
+});
+
+
+
+
+app.get("/get-farmowner-orders/:userId", (req, res) => {
+  const userId = req.params.userId;
+
+  const query = `
+    SELECT 
+      o.id,
+      o.customer_id,
+      u.fullname AS customerName,
+      u.email AS customerEmail,
+      o.delivery_address AS address,
+      o.contact_number AS phone,
+      o.status,
+      o.created_at,
+      o.deliveryman_id,
+      GROUP_CONCAT(
+        CONCAT(p.name, ' (', oi.quantity, ' KG)')
+        SEPARATOR ', '
+      ) AS productName,
+      SUM(oi.quantity) AS totalQuantity,
+      SUM(oi.price) AS totalPrice
+    FROM orders o
+    LEFT JOIN order_items oi ON o.id = oi.order_id
+    LEFT JOIN products p ON oi.product_id = p.id
+    LEFT JOIN users u ON o.customer_id = u.id
+    WHERE o.farmowner_id = ?
+    GROUP BY o.id, u.fullname, u.email, o.delivery_address, o.contact_number, o.status, o.created_at, o.deliveryman_id
+    ORDER BY o.created_at DESC
+  `;
+
+  db.query(query, [userId], (err, results) => {
+    if (err) {
+      console.error("Get farmowner orders error:", err);
+      return res.status(500).json({ message: "Failed to fetch orders" });
+    }
+    res.json(results);
+  });
+});
+
+app.put("/update-order-status/:id", (req, res) => {
+  const orderId = req.params.id;
+  const { status, deliverymanId } = req.body;
+
+  if (!status || !["Pending", "Approved", "Cancelled", "Delivered"].includes(status)) {
+    return res.status(400).json({ message: "Invalid status" });
+  }
+
+  let query = "UPDATE orders SET status = ?";
+  const params = [status];
+
+  if (deliverymanId && status === "Approved") {
+    query += ", deliveryman_id = ?";
+    params.push(deliverymanId);
+  }
+
+  query += " WHERE id = ?";
+  params.push(orderId);
+
+  db.query(query, params, (err) => {
+    if (err) {
+      console.error("Update order status error:", err);
+      return res.status(500).json({ message: "Failed to update order status" });
+    }
+    res.json({ message: "Order status updated successfully" });
+  });
+});
+
+// ========================
+// ✅ Delivery Management Routes
+// ========================
+app.get("/get-deliverymen", (req, res) => {
+  db.query("SELECT * FROM deliverymen WHERE status = 'active'", (err, results) => {
+    if (err) return res.status(500).json({ message: "Database error" });
+    res.json(results);
+  });
+});
+
+app.get("/get-delivery-orders/:deliverymanId", (req, res) => {
+  const deliverymanId = req.params.deliverymanId;
+
+  const query = `
+    SELECT 
+      o.id,
+      o.customer_id,
+      o.farmowner_id,
+      o.total_price AS totalCost,
+      o.delivery_address AS address,
+      o.contact_number AS phone,
+      o.status,
+
+      DATE_FORMAT(o.created_at, '%Y-%m-%d %h:%i %p') AS createdAt,
+
+      u1.fullname AS customerName,
+      u2.fullname AS farmownerName,
+
+      GROUP_CONCAT(
+        CONCAT(p.name, ' (', oi.quantity, ' KG)')
+        SEPARATOR ', '
+      ) AS productList,
+
+      SUM(oi.quantity) AS totalQuantity
+
+    FROM orders o
+    LEFT JOIN order_items oi ON o.id = oi.order_id
+    LEFT JOIN products p ON oi.product_id = p.id
+    LEFT JOIN users u1 ON o.customer_id = u1.id
+    LEFT JOIN users u2 ON o.farmowner_id = u2.id
+
+    WHERE o.deliveryman_id = ?
+
+    GROUP BY o.id
+    ORDER BY o.created_at DESC
+  `;
+
+  db.query(query, [deliverymanId], (err, results) => {
+    if (err) return res.status(500).json({ message: "Database error", err });
+    res.json(results);
+  });
+});
+
 
 // ========================
 // ✅ Server Listen

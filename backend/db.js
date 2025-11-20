@@ -1,19 +1,11 @@
-const mysql = require("mysql");
+// db.js
+import mysql from "mysql2";
 
-// ✅ Create MySQL connection
 const db = mysql.createConnection({
-  host: "localhost",   // Database host
-  user: "root",        // Your MySQL username
-  password: "20032003",        // Your MySQL password (if any)
-  database: "farmdb",  // Database name
+  host: "localhost",    // phpMyAdmin host
+  user: "root",         // your DB username
+  password: "",         // your DB password
+  database: "signup"    // your DB name
 });
 
-db.connect((err) => {
-  if (err) {
-    console.error("❌ MySQL Connection Failed:", err);
-  } else {
-    console.log("✅ MySQL Connected Successfully!");
-  }
-});
-
-module.exports = db;
+export default db;

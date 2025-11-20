@@ -61,6 +61,7 @@ export default function FarmOwnerDashboard() {
       formData.append("price", newProduct.price);
       formData.append("description", newProduct.description);
       formData.append("userId", user.id);
+      formData.append("owner_email", user.email);
       formData.append("image", newProduct.image);
 
       await axios.post("http://localhost:5000/add-product", formData, {
@@ -179,29 +180,21 @@ export default function FarmOwnerDashboard() {
               Dashboard
             </button>
             <button
-              onClick={() => alert("Orders clicked")}
+              onClick={() => navigate("/delivery-management")}
               style={{ ...buttonStyle, backgroundColor: "#38A169" }}
               onMouseEnter={sidebarButtonHover}
               onMouseLeave={sidebarButtonLeave}
             >
-              Orders
+              Delivery Management
             </button>
-            <button
-              onClick={() => alert("Delivery clicked")}
-              style={{ ...buttonStyle, backgroundColor: "#38A169" }}
-              onMouseEnter={sidebarButtonHover}
-              onMouseLeave={sidebarButtonLeave}
-            >
-              Delivery
-            </button>
-            <button
+            {/* <button
               onClick={() => alert("Reports clicked")}
               style={{ ...buttonStyle, backgroundColor: "#38A169" }}
               onMouseEnter={sidebarButtonHover}
               onMouseLeave={sidebarButtonLeave}
             >
               Reports
-            </button>
+            </button> */}
             <button
               onClick={() => navigate("/farm-owner-profile")}
               style={{ ...buttonStyle, backgroundColor: "#38A169" }}
