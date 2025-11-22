@@ -187,14 +187,7 @@ export default function FarmOwnerDashboard() {
             >
               Delivery Management
             </button>
-            {/* <button
-              onClick={() => alert("Reports clicked")}
-              style={{ ...buttonStyle, backgroundColor: "#38A169" }}
-              onMouseEnter={sidebarButtonHover}
-              onMouseLeave={sidebarButtonLeave}
-            >
-              Reports
-            </button> */}
+            
             <button
               onClick={() => navigate("/farm-owner-profile")}
               style={{ ...buttonStyle, backgroundColor: "#38A169" }}
