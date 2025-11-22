@@ -6,8 +6,10 @@ export default function DeliveryManagement() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [deliverymen, setDeliverymen] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all"); // all, pending, approved, delivered
+  const [selectedDeliveryman, setSelectedDeliveryman] = useState({}); // orderId -> deliverymanId
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem("user"));
@@ -21,8 +23,20 @@ export default function DeliveryManagement() {
   useEffect(() => {
     if (user) {
       fetchOrders();
+      if (user.role === "Owner" || user.role === "farmowner") {
+        fetchDeliverymen();
+      }
     }
   }, [user, filter]);
+
+  const fetchDeliverymen = async () => {
+    try {
+      const res = await axios.get("http://localhost:5000/get-deliverymen");
+      setDeliverymen(res.data);
+    } catch (err) {
+      console.error("Failed to fetch deliverymen:", err);
+    }
+  };
 
   const fetchOrders = async () => {
     try {
@@ -147,45 +161,89 @@ export default function DeliveryManagement() {
                   </div>
                 )}
                 {user.role === "Customer" && (
-  <div style={infoRow}>
-    <strong>Seller:</strong> {order.farmownerName || "N/A"}
-  </div>
-)}
-
-    <div style={infoRow}>
-      <strong>Products:</strong> {order.productName || "N/A"}
-    </div>
-    <div style={infoRow}>
-      <strong>Quantity:</strong> {order.totalQuantity || 0} KG
-    </div>
-    <div style={infoRow}>
-      <strong>Total:</strong> ৳{order.totalPrice || 0}
-    </div>
-    <div style={infoRow}>
-      <strong>Address:</strong> {order.address || "N/A"}
-    </div>
-    <div style={infoRow}>
-      <strong>Phone:</strong> {order.phone || "N/A"}
-    </div>
-    <div style={infoRow}>
-      <strong>Date:</strong> {order.created_at ? new Date(order.created_at).toLocaleDateString() : "N/A"}
-    </div>
-
-
+                  <div style={infoRow}>
+                    <strong>Seller:</strong> {order.farmownerName || "N/A"}
+                  </div>
+                )}
+                {user.role === "Customer" && order.deliverymanName && (
+                  <div style={infoRow}>
+                    <strong>🚚 Deliveryman:</strong> {order.deliverymanName} ({order.deliverymanEmail || "N/A"})
+                  </div>
+                )}
+                {(user.role === "Owner" || user.role === "farmowner") && order.deliverymanName && (
+                  <div style={infoRow}>
+                    <strong>🚚 Assigned Deliveryman:</strong> {order.deliverymanName} ({order.deliverymanEmail || "N/A"})
+                  </div>
+                )}
+                <div style={infoRow}>
+                  <strong>Products:</strong> {order.productName || "N/A"}
+                </div>
+                <div style={infoRow}>
+                  <strong>Quantity:</strong> {order.totalQuantity || 0} KG
+                </div>
+                <div style={infoRow}>
+                  <strong>Total:</strong> ৳{order.totalPrice || 0}
+                </div>
+                <div style={infoRow}>
+                  <strong>Address:</strong> {order.address || "N/A"}
+                </div>
+                <div style={infoRow}>
+                  <strong>Phone:</strong> {order.phone || "N/A"}
+                </div>
+                <div style={infoRow}>
+                  <strong>Date:</strong> {order.created_at ? new Date(order.created_at).toLocaleDateString() : "N/A"}
+                </div>
               </div>
 
               <div style={actionButtons}>
                 {(user.role === "Owner" || user.role === "farmowner") && order.status === "Pending" && (
                   <>
+                    {deliverymen.length > 0 ? (
+                      <div style={{ width: "100%", marginBottom: "10px" }}>
+                        <label style={{ display: "block", marginBottom: "5px", fontSize: "14px", fontWeight: "600" }}>
+                          Assign Deliveryman:
+                        </label>
+                        <select
+                          style={{
+                            width: "100%",
+                            padding: "8px",
+                            borderRadius: "6px",
+                            border: "1px solid #ccc",
+                            fontSize: "14px",
+                            marginBottom: "10px",
+                          }}
+                          value={selectedDeliveryman[order.id] || ""}
+                          onChange={(e) => {
+                            setSelectedDeliveryman({ ...selectedDeliveryman, [order.id]: e.target.value });
+                          }}
+                        >
+                          <option value="">Select Deliveryman</option>
+                          {deliverymen.map((dm) => (
+                            <option key={dm.id} value={dm.id}>
+                              {dm.fullname} ({dm.email})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: "12px", color: "#666", marginBottom: "10px" }}>
+                        No deliverymen available
+                      </p>
+                    )}
                     <button
                       style={{ ...actionBtn, background: "#4caf50" }}
                       onClick={() => {
-                        if (window.confirm("Approve this order?")) {
-                          handleStatusUpdate(order.id, "Approved");
+                        const deliverymanId = selectedDeliveryman[order.id];
+                        if (!deliverymanId && deliverymen.length > 0) {
+                          alert("Please select a deliveryman first");
+                          return;
+                        }
+                        if (window.confirm("Approve this order and assign deliveryman?")) {
+                          handleStatusUpdate(order.id, "Approved", deliverymanId || null);
                         }
                       }}
                     >
-                      Approve
+                      Approve & Assign
                     </button>
                     <button
                       style={{ ...actionBtn, background: "#f44336" }}

@@ -41,6 +41,7 @@ export default function Login() {
         if (role === "customer") navigate("/customer-dashboard", { replace: true });
         else if (role === "owner") navigate("/farm-owner-dashboard", { replace: true });
         else if (role === "admin") navigate("/admin-dashboard", { replace: true });
+        else if (role === "deliveryman") navigate("/deliveryman-dashboard", { replace: true });
         else navigate("/", { replace: true }); // fallback to hero
       }
     } catch (err) {

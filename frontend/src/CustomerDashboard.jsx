@@ -192,10 +192,58 @@ export default function CustomerDashboard() {
                 <th>Quantity</th>
                 <th>Total Cost</th>
                 <th>Status</th>
+                <th>Deliveryman</th>
                 <th>Report</th>
               </tr>
             </thead>
             <tbody>
+  {orders.map((o) => (
+    <tr key={o.id}>
+      <td>{o.productName}</td>
+      <td>{o.quantity ?? o.totalQuantity ?? 0}</td>
+<td>৳{o.totalCost ?? o.totalPrice ?? 0}</td>
+
+      <td>
+        <span
+          className={`status-badge ${
+            o.status === "Delivered"
+              ? "delivered"
+              : o.status === "Approved"
+              ? "approved"
+              : o.status === "Cancelled"
+              ? "cancelled"
+              : "pending"
+          }`}
+        >
+          {o.status || "Pending"}
+        </span>
+      </td>
+      <td>
+        {o.deliverymanName ? (
+          <span style={{ fontSize: "12px" }}>
+            🚚 {o.deliverymanName}
+            {o.deliverymanEmail && <br />}
+            {o.deliverymanEmail && <span style={{ color: "#666" }}>{o.deliverymanEmail}</span>}
+          </span>
+        ) : (
+          <span style={{ color: "#999" }}>Not assigned</span>
+        )}
+      </td>
+      <td>
+        <button
+          className="report-btn"
+          onClick={() => {
+            setReportingOrder(o);
+            setReportMessage("");
+          }}
+          disabled={o.status === "Delivered"}
+        >
+          Report Owner
+        </button>
+      </td>
+    </tr>
+  ))}
+</tbody>
               {orders.map((o) => (
                 <tr key={o.id}>
                   <td>{o.productName}</td>
