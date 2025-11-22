@@ -32,6 +32,9 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+
+
+
 import db from "./db.js";
 
 db.connect((err) => {
@@ -493,37 +496,59 @@ app.delete("/delete-product/:id", (req, res) => {
 
 
 ///////////////reports
+app.post("/report", upload.single("image"), (req, res) => {
+  const { reportedFarmOwnerId, reporterCustomerId, reason } = req.body;
 
-app.post("/report", async (req, res) => {
-  const { reportedFarmOwnerId, reporterCustomerId, reason, proofUrl } = req.body;
+  // uploaded file name (if exists)
+  const proofUrl = req.file ? req.file.filename : null;
 
-  // order_id is optional now
   if (!reportedFarmOwnerId || !reporterCustomerId || !reason) {
     return res.status(400).json({ message: "Missing required fields" });
   }
 
-  try {
-    const query = `
-      INSERT INTO reports 
-      (reportedFarmOwnerId, reporterCustomerId, reason, proofUrl)
-      VALUES (?, ?, ?, ?)
-    `;
-    db.query(
-      query,
-      [reportedFarmOwnerId, reporterCustomerId, reason, proofUrl || null],
-      (err, result) => {
-        if (err) {
-          console.error(err);
-          return res.status(500).json({ message: "Database error" });
-        }
-        return res.json({ message: "Report submitted successfully" });
+  const query = `
+    INSERT INTO reports 
+    (reportedFarmOwnerId, reporterCustomerId, reason, proofUrl)
+    VALUES (?, ?, ?, ?)
+  `;
+
+  db.query(
+    query,
+    [reportedFarmOwnerId, reporterCustomerId, reason, proofUrl],
+    (err, result) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ message: "Database error" });
       }
-    );
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
+      return res.json({ message: "Report submitted successfully" });
+    }
+  );
 });
+
+
+// ========================
+// DELETE a Report (Admin)
+// ========================
+app.delete("/admin/reports/:id", (req, res) => {
+  const { id } = req.params;
+
+  const query = `DELETE FROM reports WHERE id = ?`;
+
+  db.query(query, [id], (err, result) => {
+    if (err) {
+      console.error("Delete error:", err);
+      return res.status(500).json({ message: "Database error" });
+    }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Report not found" });
+    }
+
+    return res.json({ message: "Report deleted successfully" });
+  });
+});
+
+
 
 // ========================
 // ✅ Order Routes
@@ -633,8 +658,9 @@ app.get("/get-my-orders/:customerId", (req, res) => {
 
 
 
+// File: server.js (or wherever your routes are)
 app.get("/get-farmowner-orders/:userId", (req, res) => {
-  const userId = req.params.userId;
+    const userId = req.params.userId;
 
   const query = `
     SELECT 
@@ -664,15 +690,52 @@ app.get("/get-farmowner-orders/:userId", (req, res) => {
     GROUP BY o.id, u.fullname, u.email, o.delivery_address, o.contact_number, o.status, o.created_at, o.deliveryman_id, d.fullname, d.email
     ORDER BY o.created_at DESC
   `;
+    const query = `
+        SELECT 
+            o.id,
+            o.customer_id,
+            u.fullname AS customerName,
+            u.email AS customerEmail,
+            o.delivery_address AS address,
+            o.contact_number AS phone,
+            o.status,
+            o.created_at,
+            o.deliveryman_id,
 
-  db.query(query, [userId], (err, results) => {
-    if (err) {
-      console.error("Get farmowner orders error:", err);
-      return res.status(500).json({ message: "Failed to fetch orders" });
-    }
-    res.json(results);
-  });
+            GROUP_CONCAT(
+                CONCAT(p.name, ' (', oi.quantity, ' KG)')
+                SEPARATOR ', '
+            ) AS productName,
+
+            SUM(oi.quantity) AS totalQuantity,
+            SUM(oi.price) AS totalPrice
+        FROM orders o
+        LEFT JOIN order_items oi ON o.id = oi.order_id
+        LEFT JOIN products p ON oi.product_id = p.id
+        LEFT JOIN users u ON o.customer_id = u.id
+        WHERE o.farmowner_id = ?
+        GROUP BY 
+            o.id, 
+            u.fullname, 
+            u.email, 
+            o.delivery_address, 
+            o.contact_number, 
+            o.status, 
+            o.created_at,
+            o.deliveryman_id
+        ORDER BY o.created_at DESC
+    `;
+
+    db.query(query, [userId], (err, results) => {
+        if (err) {
+            console.error("Get farmowner orders error:", err);
+            return res.status(500).json({ message: "Failed to fetch orders" });
+        }
+        res.json(results);
+    });
 });
+
+
 
 app.put("/update-order-status/:id", (req, res) => {
   const orderId = req.params.id;
