@@ -16,14 +16,14 @@ export default function AdminDashboard() {
   const [userRoles, setUserRoles] = useState({ Customers: 0, Owners: 0, DeliveryMen: 0 });
   const [recentReports, setRecentReports] = useState([]);
 
-  // Fetch all stats
+  const [modalImage, setModalImage] = useState(null); // For proof modal
+
   useEffect(() => {
     fetchStats();
   }, []);
 
   const fetchStats = async () => {
     try {
-      // Users
       const resUsers = await fetch("http://localhost:5000/admin/users");
       const users = await resUsers.json();
 
@@ -33,21 +33,18 @@ export default function AdminDashboard() {
       const Owners = users.filter((u) => u.role === "Owner").length;
       const DeliveryMen = users.filter((u) => u.role === "DeliveryMan").length;
 
-      // Products
       const resProducts = await fetch("http://localhost:5000/admin/products");
       const products = await resProducts.json();
       const totalProducts = products.length;
 
-      // Orders
       const resOrders = await fetch("http://localhost:5000/admin/orders");
       const orders = await resOrders.json();
       const totalOrders = orders.length;
 
-      // Reports
       const resReports = await fetch("http://localhost:5000/admin/reports");
       const reports = await resReports.json();
       const totalReports = reports.length;
-      const recentReports = reports.slice(-5).reverse(); // last 5 reports
+      const recentReports = reports.slice(-5).reverse();
 
       setStats({ totalUsers, totalProducts, totalOrders, totalReports, restrictedUsers });
       setUserRoles({ Customers, Owners, DeliveryMen });
@@ -113,24 +110,9 @@ export default function AdminDashboard() {
         <div style={{ marginTop: "40px" }}>
           <h2>User Roles</h2>
           <div style={{ display: "flex", gap: "20px", marginTop: "15px" }}>
-            <StatCard
-              title="Customers"
-              count={userRoles.Customers}
-              color="#64b5f6"
-              onClick={() => navigate("/admin/users?role=Customer")}
-            />
-            <StatCard
-              title="Owners"
-              count={userRoles.Owners}
-              color="#81c784"
-              onClick={() => navigate("/admin/users?role=Owner")}
-            />
-            <StatCard
-              title="DeliveryMen"
-              count={userRoles.DeliveryMen}
-              color="#ffb74d"
-              onClick={() => navigate("/admin/users?role=DeliveryMan")}
-            />
+            <StatCard title="Customers" count={userRoles.Customers} color="#64b5f6" onClick={() => navigate("/admin/users?role=Customer")} />
+            <StatCard title="Owners" count={userRoles.Owners} color="#81c784" onClick={() => navigate("/admin/users?role=Owner")} />
+            <StatCard title="DeliveryMen" count={userRoles.DeliveryMen} color="#ffb74d" onClick={() => navigate("/admin/users?role=DeliveryMan")} />
           </div>
         </div>
 
@@ -155,12 +137,23 @@ export default function AdminDashboard() {
                 </tr>
               ) : (
                 recentReports.map((r) => (
-                  <tr key={r.id} style={{ cursor: "pointer" }} onClick={() => navigate(`/admin/users?role=Owner&highlight=${r.reportedFarmOwnerId}`)}>
+                  <tr key={r.id} style={{ cursor: "pointer" }}>
                     <td>{r.id}</td>
                     <td>{r.reportedFarmOwnerId}</td>
                     <td>{r.reporterCustomerId}</td>
                     <td>{r.reason}</td>
-                    <td>{r.proofUrl ? <a href={r.proofUrl} target="_blank" rel="noopener noreferrer">View</a> : "N/A"}</td>
+                    <td>
+                      {r.proofUrl ? (
+                        <button
+                          onClick={() => setModalImage(`http://localhost:5000/uploads/${r.proofUrl}`)}
+                          style={{ background: "none", border: "none", color: "#1976d2", cursor: "pointer" }}
+                        >
+                          View
+                        </button>
+                      ) : (
+                        "N/A"
+                      )}
+                    </td>
                     <td>{new Date(r.created_at).toLocaleString()}</td>
                   </tr>
                 ))
@@ -169,6 +162,31 @@ export default function AdminDashboard() {
           </table>
         </div>
       </main>
+
+      {/* ---------------- IMAGE MODAL ---------------- */}
+      {modalImage && (
+        <div
+          onClick={() => setModalImage(null)}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.7)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <img
+            src={modalImage}
+            alt="Report Proof"
+            style={{ maxWidth: "90%", maxHeight: "90%", borderRadius: "12px", boxShadow: "0 5px 20px rgba(0,0,0,0.5)" }}
+          />
+        </div>
+      )}
     </div>
   );
 }

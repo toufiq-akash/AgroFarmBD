@@ -8,8 +8,9 @@ export default function CustomerDashboard() {
   const [user, setUser] = useState({});
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [reportingOrder, setReportingOrder] = useState(null); // holds order to report
+  const [reportingOrder, setReportingOrder] = useState(null);
   const [reportText, setReportText] = useState("");
+  const [reportImage, setReportImage] = useState(null);
   const [reportMessage, setReportMessage] = useState("");
 
   // Auth check
@@ -60,7 +61,7 @@ export default function CustomerDashboard() {
       };
       await axios.post("http://localhost:5000/place-order", payload);
       alert(`Order placed for ${product.name}!`);
-      fetchOrders(); // refresh orders
+      fetchOrders();
     } catch (err) {
       console.error("Failed to place order", err);
       alert("Failed to place order");
@@ -72,14 +73,15 @@ export default function CustomerDashboard() {
     navigate("/hero");
   };
 
-  // ✅ Handle Report Submission
+  // =============================
+  //  REPORT SUBMIT (WITH IMAGE)
+  // =============================
   const handleReportSubmit = async () => {
     if (!reportText.trim()) {
       setReportMessage("Reason cannot be empty!");
       return;
     }
 
-    // Make sure ownerId exists in your order object
     const ownerId = reportingOrder?.farmowner_id || reportingOrder?.ownerId;
     if (!ownerId) {
       setReportMessage("Cannot find owner ID for this order!");
@@ -87,14 +89,23 @@ export default function CustomerDashboard() {
     }
 
     try {
-      const res = await axios.post("http://localhost:5000/report", {
-        reportedFarmOwnerId: ownerId,
-        reporterCustomerId: user.id,
-        reason: reportText.trim(),
+      const formData = new FormData();
+      formData.append("reportedFarmOwnerId", ownerId);
+      formData.append("reporterCustomerId", user.id);
+      formData.append("reason", reportText.trim());
+
+      if (reportImage) {
+        formData.append("image", reportImage); // multer field name
+      }
+
+      const res = await axios.post("http://localhost:5000/report", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
 
       setReportMessage(res.data.message || "Report submitted!");
       setReportText("");
+      setReportImage(null);
+
       setTimeout(() => setReportingOrder(null), 1500);
     } catch (err) {
       console.error(err);
@@ -103,15 +114,13 @@ export default function CustomerDashboard() {
   };
 
   const stats = {
-  totalOrders: orders.length,
-  totalSpent: orders.reduce(
-  (sum, o) => sum + parseFloat(o.totalCost ?? o.totalPrice ?? 0),
-  0
-),
-
-  delivered: orders.filter((o) => o.status === "Pending").length,
-};
-
+    totalOrders: orders.length,
+    totalSpent: orders.reduce(
+      (sum, o) => sum + parseFloat(o.totalCost ?? o.totalPrice ?? 0),
+      0
+    ),
+    delivered: orders.filter((o) => o.status === "Pending").length,
+  };
 
   return (
     <div className="dashboard-wrapper">
@@ -120,12 +129,20 @@ export default function CustomerDashboard() {
         <h2>🌽 AgroFarmBD</h2>
         <ul>
           <li className="active">Dashboard</li>
-          <li style={{ cursor: "pointer" }} onClick={() => navigate("/products")}>Products</li>
-          <li style={{ cursor: "pointer" }} onClick={() => navigate("/delivery-management")}>Orders</li>
-          <li>Statistics</li>
-          <li style={{ cursor: "pointer" }} onClick={() => navigate("/customer-profile")}>Profile</li>
+          <li style={{ cursor: "pointer" }} onClick={() => navigate("/products")}>
+            Products
+          </li>
+          <li style={{ cursor: "pointer" }} onClick={() => navigate("/delivery-management")}>
+            Orders
+          </li>
+          {/* <li>Statistics</li> */}
+          <li style={{ cursor: "pointer" }} onClick={() => navigate("/customer-profile")}>
+            Profile
+          </li>
         </ul>
-        <button className="logout-btn" onClick={handleLogout}>Logout</button>
+        <button className="logout-btn" onClick={handleLogout}>
+          Logout
+        </button>
       </aside>
 
       {/* Main Content */}
@@ -134,9 +151,13 @@ export default function CustomerDashboard() {
         <header className="dashboard-header">
           <div>
             <h1>Customer Dashboard</h1>
-            <p>Welcome back, <b>{user.fullName || "Customer"}</b> ({user.role || "Customer"})</p>
+            <p>
+              Welcome back, <b>{user.fullName || "Customer"}</b> ({user.role || "Customer"})
+            </p>
           </div>
-          <button className="profile-btn" onClick={() => navigate("/customer-profile")}>View Profile</button>
+          <button className="profile-btn" onClick={() => navigate("/customer-profile")}>
+            View Profile
+          </button>
         </header>
 
         {/* Statistics */}
@@ -147,9 +168,13 @@ export default function CustomerDashboard() {
           </div>
           <div className="stat-item">
             <h3>Total Spent</h3>
-            <p>৳{stats.totalSpent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-
-
+            <p>
+              ৳
+              {stats.totalSpent.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </p>
           </div>
           <div className="stat-item">
             <h3>Delivered Orders</h3>
@@ -157,7 +182,7 @@ export default function CustomerDashboard() {
           </div>
         </section>
 
-        {/* Orders Section */}
+        {/* Orders */}
         <section className="orders-section">
           <h2>My Orders</h2>
           <table>
@@ -171,47 +196,47 @@ export default function CustomerDashboard() {
               </tr>
             </thead>
             <tbody>
-  {orders.map((o) => (
-    <tr key={o.id}>
-      <td>{o.productName}</td>
-      <td>{o.quantity ?? o.totalQuantity ?? 0}</td>
-<td>৳{o.totalCost ?? o.totalPrice ?? 0}</td>
+              {orders.map((o) => (
+                <tr key={o.id}>
+                  <td>{o.productName}</td>
+                  <td>{o.quantity ?? o.totalQuantity ?? 0}</td>
+                  <td>৳{o.totalCost ?? o.totalPrice ?? 0}</td>
 
-      <td>
-        <span
-          className={`status-badge ${
-            o.status === "Delivered"
-              ? "delivered"
-              : o.status === "Approved"
-              ? "approved"
-              : o.status === "Cancelled"
-              ? "cancelled"
-              : "pending"
-          }`}
-        >
-          {o.status || "Pending"}
-        </span>
-      </td>
-      <td>
-        <button
-          className="report-btn"
-          onClick={() => {
-            setReportingOrder(o);
-            setReportMessage("");
-          }}
-          disabled={o.status === "Delivered"}
-        >
-          Report Owner
-        </button>
-      </td>
-    </tr>
-  ))}
-</tbody>
+                  <td>
+                    <span
+                      className={`status-badge ${
+                        o.status === "Delivered"
+                          ? "delivered"
+                          : o.status === "Approved"
+                          ? "approved"
+                          : o.status === "Cancelled"
+                          ? "cancelled"
+                          : "pending"
+                      }`}
+                    >
+                      {o.status || "Pending"}
+                    </span>
+                  </td>
 
+                  <td>
+                    <button
+                      className="report-btn"
+                      onClick={() => {
+                        setReportingOrder(o);
+                        setReportMessage("");
+                      }}
+                      disabled={o.status === "Delivered"}
+                    >
+                      Report Owner
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
           </table>
         </section>
 
-        {/* ReportForm Overlay */}
+        {/* Report Modal */}
         {reportingOrder && (
           <div className="modal-overlay">
             <div className="modal-box">
@@ -224,11 +249,18 @@ export default function CustomerDashboard() {
                 onChange={(e) => setReportText(e.target.value)}
               />
 
+              {/* File Upload */}
+              <input
+                type="file"
+                accept="image/*"
+                className="report-file-input"
+                onChange={(e) => setReportImage(e.target.files[0])}
+              />
+
               <div className="modal-actions">
                 <button className="submit-btn" onClick={handleReportSubmit}>
                   Submit Report
                 </button>
-
                 <button className="cancel-btn" onClick={() => setReportingOrder(null)}>
                   Cancel
                 </button>
