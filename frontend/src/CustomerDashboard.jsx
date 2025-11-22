@@ -167,6 +167,7 @@ export default function CustomerDashboard() {
                 <th>Quantity</th>
                 <th>Total Cost</th>
                 <th>Status</th>
+                <th>Deliveryman</th>
                 <th>Report</th>
               </tr>
             </thead>
@@ -191,6 +192,17 @@ export default function CustomerDashboard() {
         >
           {o.status || "Pending"}
         </span>
+      </td>
+      <td>
+        {o.deliverymanName ? (
+          <span style={{ fontSize: "12px" }}>
+            🚚 {o.deliverymanName}
+            {o.deliverymanEmail && <br />}
+            {o.deliverymanEmail && <span style={{ color: "#666" }}>{o.deliverymanEmail}</span>}
+          </span>
+        ) : (
+          <span style={{ color: "#999" }}>Not assigned</span>
+        )}
       </td>
       <td>
         <button

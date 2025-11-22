@@ -40,6 +40,92 @@ db.connect((err) => {
 });
 
 // ========================
+// ✅ Helper Functions
+// ========================
+/**
+ * Updates deliveryman earnings when an order is marked as Delivered
+ * @param {number} orderId - The order ID
+ * @param {string} newStatus - The new status being set
+ * @param {callback} callback - Callback function (err, result)
+ */
+function updateDeliverymanEarnings(orderId, newStatus, callback) {
+  // Only process if status is being changed to 'Delivered'
+  if (newStatus !== "Delivered") {
+    return callback(null, { message: "Status is not Delivered, no earnings update needed" });
+  }
+
+  // First, get the order details including current status and deliveryman_id
+  db.query("SELECT deliveryman_id, status FROM orders WHERE id = ?", [orderId], (err, orderResults) => {
+    if (err) return callback(err);
+    if (orderResults.length === 0) return callback(new Error("Order not found"));
+    
+    const order = orderResults[0];
+    const previousStatus = order.status;
+    const deliverymanId = order.deliveryman_id;
+
+    // Check if order was already delivered (to avoid double payment)
+    if (previousStatus === "Delivered") {
+      return callback(null, { message: "Order already delivered, earnings already credited" });
+    }
+
+    // Check if order has a deliveryman assigned
+    if (!deliverymanId) {
+      return callback(null, { message: "No deliveryman assigned to this order" });
+    }
+
+    // Get deliveryman details from users table
+    db.query("SELECT email, fullname FROM users WHERE id = ? AND role = 'DeliveryMan'", [deliverymanId], (err, userResults) => {
+      if (err) return callback(err);
+      if (userResults.length === 0) {
+        return callback(new Error("Deliveryman not found in users table"));
+      }
+
+      const deliverymanEmail = userResults[0].email;
+      const deliverymanName = userResults[0].fullname;
+
+      // Check if deliveryman exists in deliverymen table, if not create one
+      db.query("SELECT id, earnings FROM deliverymen WHERE email = ?", [deliverymanEmail], (err, deliverymanResults) => {
+        if (err) return callback(err);
+
+        if (deliverymanResults.length === 0) {
+          // Create new deliveryman record
+          const currentEarnings = 50.00;
+          db.query(
+            "INSERT INTO deliverymen (fullname, email, status, earnings) VALUES (?, ?, 'active', ?)",
+            [deliverymanName, deliverymanEmail, currentEarnings],
+            (err, insertResult) => {
+              if (err) return callback(err);
+              callback(null, { 
+                message: "Deliveryman earnings updated", 
+                deliverymanId: insertResult.insertId,
+                earnings: currentEarnings 
+              });
+            }
+          );
+        } else {
+          // Update existing deliveryman earnings
+          const currentEarnings = parseFloat(deliverymanResults[0].earnings || 0);
+          const newEarnings = currentEarnings + 50.00;
+          
+          db.query(
+            "UPDATE deliverymen SET earnings = ? WHERE email = ?",
+            [newEarnings, deliverymanEmail],
+            (err) => {
+              if (err) return callback(err);
+              callback(null, { 
+                message: "Deliveryman earnings updated", 
+                deliverymanId: deliverymanResults[0].id,
+                earnings: newEarnings 
+              });
+            }
+          );
+        }
+      });
+    });
+  });
+}
+
+// ========================
 // ✅ User Routes
 // ========================
 app.post("/signup", async (req, res) => {
@@ -505,7 +591,7 @@ app.post("/place-order", (req, res) => {
   });
 });
 
-// Get My Orders for a Customer
+// Get My Orders for a Customer (with deliveryman info)
 app.get("/get-my-orders/:customerId", (req, res) => {
   const customerId = req.params.customerId;
 
@@ -514,7 +600,10 @@ app.get("/get-my-orders/:customerId", (req, res) => {
       o.id AS id,
       o.customer_id,
       o.farmowner_id,
+      o.deliveryman_id,
       u.fullname AS farmownerName,
+      d.fullname AS deliverymanName,
+      d.email AS deliverymanEmail,
       GROUP_CONCAT(CONCAT(p.name, ' (', oi.quantity, ')') SEPARATOR ', ') AS productName,
       SUM(oi.quantity) AS totalQuantity,
       SUM(oi.price) AS totalPrice,
@@ -526,8 +615,9 @@ app.get("/get-my-orders/:customerId", (req, res) => {
     JOIN order_items oi ON o.id = oi.order_id
     JOIN products p ON oi.product_id = p.id
     JOIN users u ON o.farmowner_id = u.id
+    LEFT JOIN users d ON o.deliveryman_id = d.id
     WHERE o.customer_id = ?
-    GROUP BY o.id, o.farmowner_id, u.fullname, o.delivery_address, o.contact_number, o.status, o.created_at
+    GROUP BY o.id, o.farmowner_id, u.fullname, o.delivery_address, o.contact_number, o.status, o.created_at, o.deliveryman_id, d.fullname, d.email
     ORDER BY o.created_at DESC
   `;
 
@@ -557,6 +647,8 @@ app.get("/get-farmowner-orders/:userId", (req, res) => {
       o.status,
       o.created_at,
       o.deliveryman_id,
+      d.fullname AS deliverymanName,
+      d.email AS deliverymanEmail,
       GROUP_CONCAT(
         CONCAT(p.name, ' (', oi.quantity, ' KG)')
         SEPARATOR ', '
@@ -567,8 +659,9 @@ app.get("/get-farmowner-orders/:userId", (req, res) => {
     LEFT JOIN order_items oi ON o.id = oi.order_id
     LEFT JOIN products p ON oi.product_id = p.id
     LEFT JOIN users u ON o.customer_id = u.id
+    LEFT JOIN users d ON o.deliveryman_id = d.id
     WHERE o.farmowner_id = ?
-    GROUP BY o.id, u.fullname, u.email, o.delivery_address, o.contact_number, o.status, o.created_at, o.deliveryman_id
+    GROUP BY o.id, u.fullname, u.email, o.delivery_address, o.contact_number, o.status, o.created_at, o.deliveryman_id, d.fullname, d.email
     ORDER BY o.created_at DESC
   `;
 
@@ -589,14 +682,62 @@ app.put("/update-order-status/:id", (req, res) => {
     return res.status(400).json({ message: "Invalid status" });
   }
 
+  // Get current order status before updating
+  db.query("SELECT status, deliveryman_id FROM orders WHERE id = ?", [orderId], (err, currentOrder) => {
+    if (err) return res.status(500).json({ message: "Database error" });
+    if (currentOrder.length === 0) return res.status(404).json({ message: "Order not found" });
+    
+    const previousStatus = currentOrder[0].status;
+    const shouldUpdateEarnings = status === "Delivered" && previousStatus !== "Delivered";
+
   let query = "UPDATE orders SET status = ?";
   const params = [status];
 
+  // Allow assigning deliveryman when approving order
   if (deliverymanId && status === "Approved") {
-    query += ", deliveryman_id = ?";
-    params.push(deliverymanId);
+    // Verify deliveryman exists and is active
+    db.query(
+      "SELECT id FROM users WHERE id = ? AND role = 'DeliveryMan' AND status = 'active'",
+      [deliverymanId],
+      (err, results) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+        if (results.length === 0) {
+          return res.status(400).json({ message: "Invalid or inactive deliveryman" });
+        }
+
+        query += ", deliveryman_id = ?";
+        params.push(deliverymanId);
+        params.push(orderId);
+        query += " WHERE id = ?";
+
+        db.query(query, params, (err) => {
+          if (err) {
+            console.error("Update order status error:", err);
+            return res.status(500).json({ message: "Failed to update order status" });
+          }
+          
+          // If status is Delivered and wasn't already delivered, update deliveryman earnings
+          if (shouldUpdateEarnings) {
+            updateDeliverymanEarnings(orderId, status, (earningsErr, earningsResult) => {
+              if (earningsErr) {
+                console.error("Earnings update error:", earningsErr);
+                // Still return success for order update, but log the earnings error
+              }
+              res.json({ 
+                message: "Order status updated and deliveryman assigned successfully",
+                earningsUpdated: !earningsErr
+              });
+            });
+          } else {
+            res.json({ message: "Order status updated and deliveryman assigned successfully" });
+          }
+        });
+      }
+    );
+    return;
   }
 
+  // If no deliveryman assignment, just update status
   query += " WHERE id = ?";
   params.push(orderId);
 
@@ -605,20 +746,241 @@ app.put("/update-order-status/:id", (req, res) => {
       console.error("Update order status error:", err);
       return res.status(500).json({ message: "Failed to update order status" });
     }
-    res.json({ message: "Order status updated successfully" });
+    
+    // If status is Delivered and wasn't already delivered, update deliveryman earnings
+    if (shouldUpdateEarnings) {
+      updateDeliverymanEarnings(orderId, status, (earningsErr, earningsResult) => {
+        if (earningsErr) {
+          console.error("Earnings update error:", earningsErr);
+          // Still return success for order update, but log the earnings error
+        }
+        res.json({ 
+          message: "Order status updated successfully",
+          earningsUpdated: !earningsErr
+        });
+      });
+    } else {
+      res.json({ message: "Order status updated successfully" });
+    }
+  });
   });
 });
 
 // ========================
 // ✅ Delivery Management Routes
 // ========================
+// Get available deliverymen (for owners to assign)
 app.get("/get-deliverymen", (req, res) => {
-  db.query("SELECT * FROM deliverymen WHERE status = 'active'", (err, results) => {
+  db.query(
+    "SELECT id, fullname, email, status FROM users WHERE role = 'DeliveryMan' AND status = 'active'",
+    (err, results) => {
+      if (err) return res.status(500).json({ message: "Database error" });
+      res.json(results);
+    }
+  );
+});
+
+// Get deliveryman dashboard stats
+app.get("/deliveryman/stats/:deliverymanId", (req, res) => {
+  const deliverymanId = req.params.deliverymanId;
+
+  const stats = {};
+  
+  // Total assigned orders
+  db.query(
+    "SELECT COUNT(*) AS count FROM orders WHERE deliveryman_id = ?",
+    [deliverymanId],
+    (err, result1) => {
+      if (err) return res.status(500).json({ message: "Database error" });
+      stats.totalOrders = result1[0].count;
+
+      // Pending orders
+      db.query(
+        "SELECT COUNT(*) AS count FROM orders WHERE deliveryman_id = ? AND status = 'Approved'",
+        [deliverymanId],
+        (err, result2) => {
+          if (err) return res.status(500).json({ message: "Database error" });
+          stats.pendingDeliveries = result2[0].count;
+
+          // Delivered orders
+          db.query(
+            "SELECT COUNT(*) AS count FROM orders WHERE deliveryman_id = ? AND status = 'Delivered'",
+            [deliverymanId],
+            (err, result3) => {
+              if (err) return res.status(500).json({ message: "Database error" });
+              stats.deliveredOrders = result3[0].count;
+              
+              // Get deliveryman earnings
+              db.query(
+                "SELECT email FROM users WHERE id = ?",
+                [deliverymanId],
+                (err, userResult) => {
+                  if (err || userResult.length === 0) {
+                    stats.earnings = 0.00;
+                    return res.json(stats);
+                  }
+                  
+                  db.query(
+                    "SELECT earnings FROM deliverymen WHERE email = ?",
+                    [userResult[0].email],
+                    (err, earningsResult) => {
+                      if (err) {
+                        stats.earnings = 0.00;
+                      } else {
+                        stats.earnings = parseFloat(earningsResult[0]?.earnings || 0).toFixed(2);
+                      }
+                      res.json(stats);
+                    }
+                  );
+                }
+              );
+            }
+          );
+        }
+      );
+    }
+  );
+});
+
+// Get deliveryman earnings
+app.get("/deliveryman/earnings/:deliverymanId", (req, res) => {
+  const deliverymanId = req.params.deliverymanId;
+
+  // Get deliveryman email from users table
+  db.query("SELECT email, fullname FROM users WHERE id = ? AND role = 'DeliveryMan'", [deliverymanId], (err, userResults) => {
     if (err) return res.status(500).json({ message: "Database error" });
-    res.json(results);
+    if (userResults.length === 0) {
+      return res.status(404).json({ message: "Deliveryman not found" });
+    }
+
+    const deliverymanEmail = userResults[0].email;
+    const deliverymanName = userResults[0].fullname;
+
+    // Get earnings from deliverymen table
+    db.query("SELECT earnings FROM deliverymen WHERE email = ?", [deliverymanEmail], (err, earningsResults) => {
+      if (err) return res.status(500).json({ message: "Database error" });
+      
+      const earnings = earningsResults.length > 0 ? parseFloat(earningsResults[0].earnings || 0) : 0.00;
+      
+      res.json({
+        deliverymanId: deliverymanId,
+        fullname: deliverymanName,
+        email: deliverymanEmail,
+        earnings: earnings.toFixed(2)
+      });
+    });
   });
 });
 
+// Get deliveryman profile info from deliverymen table
+app.get("/deliveryman/profile/:deliverymanId", (req, res) => {
+  const deliverymanId = req.params.deliverymanId;
+
+  // Get deliveryman email from users table
+  db.query("SELECT email, fullname FROM users WHERE id = ? AND role = 'DeliveryMan'", [deliverymanId], (err, userResults) => {
+    if (err) return res.status(500).json({ message: "Database error" });
+    if (userResults.length === 0) {
+      return res.status(404).json({ message: "Deliveryman not found" });
+    }
+
+    const deliverymanEmail = userResults[0].email;
+
+    // Get profile from deliverymen table
+    db.query("SELECT * FROM deliverymen WHERE email = ?", [deliverymanEmail], (err, deliverymanResults) => {
+      if (err) return res.status(500).json({ message: "Database error" });
+      
+      if (deliverymanResults.length === 0) {
+        // If no record exists in deliverymen table, return default values
+        return res.json({
+          id: null,
+          fullname: userResults[0].fullname,
+          phone: "",
+          email: deliverymanEmail,
+          status: "active",
+          earnings: "0.00"
+        });
+      }
+
+      const deliveryman = deliverymanResults[0];
+      res.json({
+        id: deliveryman.id,
+        fullname: deliveryman.fullname || userResults[0].fullname,
+        phone: deliveryman.phone || "",
+        email: deliveryman.email || deliverymanEmail,
+        status: deliveryman.status || "active",
+        earnings: parseFloat(deliveryman.earnings || 0).toFixed(2)
+      });
+    });
+  });
+});
+
+// Update deliveryman profile in deliverymen table
+app.put("/deliveryman/profile/:deliverymanId", (req, res) => {
+  const deliverymanId = req.params.deliverymanId;
+  const { fullname, phone, email, status } = req.body;
+
+  // Get deliveryman email from users table to find existing record
+  db.query("SELECT email FROM users WHERE id = ? AND role = 'DeliveryMan'", [deliverymanId], (err, userResults) => {
+    if (err) return res.status(500).json({ message: "Database error" });
+    if (userResults.length === 0) {
+      return res.status(404).json({ message: "Deliveryman not found" });
+    }
+
+    const oldEmail = userResults[0].email;
+
+    // Check if deliveryman record exists
+    db.query("SELECT id FROM deliverymen WHERE email = ?", [oldEmail], (err, existingResults) => {
+      if (err) return res.status(500).json({ message: "Database error" });
+
+      if (existingResults.length === 0) {
+        // Create new record in deliverymen table
+        db.query(
+          "INSERT INTO deliverymen (fullname, phone, email, status, earnings) VALUES (?, ?, ?, ?, 0.00)",
+          [fullname || userResults[0].fullname, phone || "", email || oldEmail, status || "active"],
+          (err, insertResult) => {
+            if (err) return res.status(500).json({ message: "Failed to create deliveryman profile" });
+            res.json({ message: "Profile created successfully", profileId: insertResult.insertId });
+          }
+        );
+      } else {
+        // Update existing record
+        const updates = [];
+        const values = [];
+
+        if (fullname) {
+          updates.push("fullname = ?");
+          values.push(fullname);
+        }
+        if (phone !== undefined) {
+          updates.push("phone = ?");
+          values.push(phone);
+        }
+        if (email && email !== oldEmail) {
+          updates.push("email = ?");
+          values.push(email);
+        }
+        if (status) {
+          updates.push("status = ?");
+          values.push(status);
+        }
+
+        if (updates.length === 0) {
+          return res.json({ message: "No updates provided" });
+        }
+
+        values.push(oldEmail);
+        const query = `UPDATE deliverymen SET ${updates.join(", ")} WHERE email = ?`;
+        
+        db.query(query, values, (err) => {
+          if (err) return res.status(500).json({ message: "Failed to update profile" });
+          res.json({ message: "Profile updated successfully" });
+        });
+      }
+    });
+  });
+});
+
+// Get deliveryman's orders
 app.get("/get-delivery-orders/:deliverymanId", (req, res) => {
   const deliverymanId = req.params.deliverymanId;
 
@@ -631,27 +993,21 @@ app.get("/get-delivery-orders/:deliverymanId", (req, res) => {
       o.delivery_address AS address,
       o.contact_number AS phone,
       o.status,
-
       DATE_FORMAT(o.created_at, '%Y-%m-%d %h:%i %p') AS createdAt,
-
       u1.fullname AS customerName,
+      u1.email AS customerEmail,
       u2.fullname AS farmownerName,
-
       GROUP_CONCAT(
         CONCAT(p.name, ' (', oi.quantity, ' KG)')
         SEPARATOR ', '
       ) AS productList,
-
       SUM(oi.quantity) AS totalQuantity
-
     FROM orders o
     LEFT JOIN order_items oi ON o.id = oi.order_id
     LEFT JOIN products p ON oi.product_id = p.id
     LEFT JOIN users u1 ON o.customer_id = u1.id
     LEFT JOIN users u2 ON o.farmowner_id = u2.id
-
     WHERE o.deliveryman_id = ?
-
     GROUP BY o.id
     ORDER BY o.created_at DESC
   `;
@@ -662,6 +1018,214 @@ app.get("/get-delivery-orders/:deliverymanId", (req, res) => {
   });
 });
 
+// Update order status by deliveryman (mark as delivered)
+app.put("/deliveryman/update-order/:orderId", (req, res) => {
+  const orderId = req.params.orderId;
+  const { status, deliverymanId } = req.body;
+
+  if (!status || !["Delivered"].includes(status)) {
+    return res.status(400).json({ message: "Invalid status. Deliveryman can only mark orders as Delivered." });
+  }
+
+  // Verify the order belongs to this deliveryman and get current status
+  db.query("SELECT deliveryman_id, status FROM orders WHERE id = ?", [orderId], (err, results) => {
+    if (err) return res.status(500).json({ message: "Database error" });
+    if (results.length === 0) return res.status(404).json({ message: "Order not found" });
+    if (results[0].deliveryman_id != deliverymanId) {
+      return res.status(403).json({ message: "You are not assigned to this order" });
+    }
+
+    const previousStatus = results[0].status;
+    const shouldUpdateEarnings = previousStatus !== "Delivered";
+
+    db.query("UPDATE orders SET status = ? WHERE id = ?", [status, orderId], (err) => {
+      if (err) return res.status(500).json({ message: "Failed to update order status" });
+      
+      // Update deliveryman earnings if order wasn't already delivered
+      if (shouldUpdateEarnings) {
+        updateDeliverymanEarnings(orderId, status, (earningsErr, earningsResult) => {
+          if (earningsErr) {
+            console.error("Earnings update error:", earningsErr);
+            // Still return success for order update, but log the earnings error
+          }
+          res.json({ 
+            message: "Order status updated successfully",
+            earningsUpdated: !earningsErr
+          });
+        });
+      } else {
+        res.json({ 
+          message: "Order status updated successfully",
+          earningsUpdated: false,
+          note: "Order was already delivered, earnings already credited"
+        });
+      }
+    });
+  });
+});
+
+
+// ========================
+// ✅ Review Routes
+// ========================
+
+// Check if customer is eligible to review a product
+app.get("/check-review-eligibility/:productId/:customerId", (req, res) => {
+  const { productId, customerId } = req.params;
+
+  // First, verify user is a Customer
+  db.query("SELECT role FROM users WHERE id = ?", [customerId], (err, userResult) => {
+    if (err) return res.status(500).json({ message: "Database error" });
+    if (userResult.length === 0) {
+      return res.json({ eligible: false, reason: "User not found" });
+    }
+    if (userResult[0].role !== "Customer") {
+      return res.json({ eligible: false, reason: "Only customers can review products" });
+    }
+
+    // Check if customer has at least one delivered order containing this product
+    const query = `
+      SELECT COUNT(*) AS count
+      FROM orders o
+      INNER JOIN order_items oi ON o.id = oi.order_id
+      WHERE o.customer_id = ?
+        AND oi.product_id = ?
+        AND o.status = 'Delivered'
+    `;
+
+    db.query(query, [customerId, productId], (err, result) => {
+      if (err) return res.status(500).json({ message: "Database error" });
+      const hasDeliveredOrder = result[0].count > 0;
+
+      if (!hasDeliveredOrder) {
+        return res.json({
+          eligible: false,
+          reason: "You can review this product after it is delivered.",
+        });
+      }
+
+      // Check if user already has a review for this product
+      db.query("SELECT id FROM reviews WHERE product_id = ? AND customer_id = ?", [productId, customerId], (err, reviewResult) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+        const hasExistingReview = reviewResult.length > 0;
+
+        res.json({
+          eligible: true,
+          hasExistingReview: hasExistingReview,
+          existingReviewId: hasExistingReview ? reviewResult[0].id : null,
+        });
+      });
+    });
+  });
+});
+
+// Get all reviews for a product
+app.get("/get-reviews/:productId", (req, res) => {
+  const { productId } = req.params;
+
+  const query = `
+    SELECT 
+      r.id,
+      r.product_id,
+      r.customer_id,
+      r.rating,
+      r.comment,
+      r.created_at,
+      r.updated_at,
+      u.fullname AS customer_name
+    FROM reviews r
+    INNER JOIN users u ON r.customer_id = u.id
+    WHERE r.product_id = ?
+    ORDER BY r.created_at DESC
+  `;
+
+  db.query(query, [productId], (err, results) => {
+    if (err) return res.status(500).json({ message: "Database error" });
+
+    // Mask customer names (show only first letter and last letter)
+    const maskedResults = results.map((review) => {
+      const name = review.customer_name || "";
+      let maskedName = "";
+      if (name.length <= 2) {
+        maskedName = name.charAt(0) + "*";
+      } else {
+        maskedName = name.charAt(0) + "*".repeat(name.length - 2) + name.charAt(name.length - 1);
+      }
+
+      return {
+        ...review,
+        customer_name: maskedName,
+      };
+    });
+
+    res.json(maskedResults);
+  });
+});
+
+// Submit or update a review
+app.post("/submit-review", (req, res) => {
+  const { productId, customerId, rating, comment } = req.body;
+
+  if (!productId || !customerId || !rating || rating < 1 || rating > 5) {
+    return res.status(400).json({ message: "Invalid review data. Rating must be between 1 and 5." });
+  }
+
+  // Verify user is a Customer
+  db.query("SELECT role FROM users WHERE id = ?", [customerId], (err, userResult) => {
+    if (err) return res.status(500).json({ message: "Database error" });
+    if (userResult.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    if (userResult[0].role !== "Customer") {
+      return res.status(403).json({ message: "Only customers can review products" });
+    }
+
+    // Verify eligibility: customer must have a delivered order with this product
+    const eligibilityQuery = `
+      SELECT COUNT(*) AS count
+      FROM orders o
+      INNER JOIN order_items oi ON o.id = oi.order_id
+      WHERE o.customer_id = ?
+        AND oi.product_id = ?
+        AND o.status = 'Delivered'
+    `;
+
+    db.query(eligibilityQuery, [customerId, productId], (err, eligibilityResult) => {
+      if (err) return res.status(500).json({ message: "Database error" });
+      if (eligibilityResult[0].count === 0) {
+        return res.status(403).json({ message: "You can review this product after it is delivered." });
+      }
+
+      // Check if review already exists
+      db.query("SELECT id FROM reviews WHERE product_id = ? AND customer_id = ?", [productId, customerId], (err, existingResult) => {
+        if (err) return res.status(500).json({ message: "Database error" });
+
+        if (existingResult.length > 0) {
+          // Update existing review
+          const reviewId = existingResult[0].id;
+          db.query(
+            "UPDATE reviews SET rating = ?, comment = ?, updated_at = NOW() WHERE id = ?",
+            [rating, comment || null, reviewId],
+            (err) => {
+              if (err) return res.status(500).json({ message: "Failed to update review" });
+              res.json({ message: "Review updated successfully", reviewId });
+            }
+          );
+        } else {
+          // Create new review
+          db.query(
+            "INSERT INTO reviews (product_id, customer_id, rating, comment) VALUES (?, ?, ?, ?)",
+            [productId, customerId, rating, comment || null],
+            (err, result) => {
+              if (err) return res.status(500).json({ message: "Failed to submit review" });
+              res.json({ message: "Review submitted successfully", reviewId: result.insertId });
+            }
+          );
+        }
+      });
+    });
+  });
+});
 
 // ========================
 // ✅ Server Listen

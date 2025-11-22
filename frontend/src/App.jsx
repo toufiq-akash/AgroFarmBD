@@ -14,6 +14,8 @@ import FarmOwnerDashboard from './FarmOwnerDashboard.jsx';
 import FarmOwnerProfile from "./FarmOwnerProfile.jsx";
 import CustomerDashboard from './CustomerDashboard.jsx';
 import CustomerProfile from './CustomerProfile.jsx';
+import DeliverymanDashboard from './DeliverymanDashboard.jsx';
+import DeliverymanProfile from './DeliverymanProfile.jsx';
 import ProductsPage from "./ProductsPage";
 import ProductDetail from "./ProductDetail";
 import FarmOwnerProductPreview from "./FarmOwnerProductPreview";
@@ -50,11 +52,13 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
 
-        {/* Customer / Farm Owner */}
+        {/* Customer / Farm Owner / Deliveryman */}
         <Route path="/customer-dashboard" element={<CustomerDashboard />} />
         <Route path="/customer-profile" element={<CustomerProfile />} />
         <Route path="/farm-owner-dashboard" element={<FarmOwnerDashboard />} />
         <Route path="/farm-owner-profile" element={<FarmOwnerProfile />} />
+        <Route path="/deliveryman-dashboard" element={<DeliverymanDashboard />} />
+        <Route path="/deliveryman-profile" element={<DeliverymanProfile />} />
         <Route path="/products" element={<ProductsPage />} />
         <Route path="/product/:id" element={<ProductDetail />} />
         <Route path="/farm-owner/product/:id" element={<FarmOwnerProductPreview />} />

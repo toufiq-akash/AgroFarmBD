@@ -2,10 +2,11 @@
 import mysql from "mysql2";
 
 const db = mysql.createConnection({
-  host: "localhost",    // phpMyAdmin host
-  user: "root",         // your DB username
-  password: "",         // your DB password
-  database: "signup"    // your DB name
+  host: "8.219.197.217",    // phpMyAdmin host
+  user: "db_user",         // your DB username
+  password: "winter@2025",         // your DB password
+  database: "signup",
+  port: 3307    // your DB name
 });
 
 export default db;
